@@ -10,6 +10,7 @@ import assessment_pb2_grpc
 
 from services.mfa_aligner import MFAAligner
 from services.chinglish_detector import ChinglishDetector
+from services.metrics import grpc_metric
 
 class AssessmentServiceServicer(assessment_pb2_grpc.AssessmentServiceServicer):
     def __init__(self):
@@ -17,6 +18,7 @@ class AssessmentServiceServicer(assessment_pb2_grpc.AssessmentServiceServicer):
         self.detector = ChinglishDetector()
         logger.info("Initialized AssessmentServiceServicer")
         
+    @grpc_metric("AssessmentService")
     def AssessPronunciation(self, request, context):
         """
         gRPC implementation for M8: Pronunciation Assessment
@@ -48,6 +50,7 @@ class AssessmentServiceServicer(assessment_pb2_grpc.AssessmentServiceServicer):
                 
         return response
         
+    @grpc_metric("AssessmentService")
     def DetectChinglish(self, request, context):
         """
         gRPC implementation for M11: Chinglish Detection
@@ -68,3 +71,4 @@ class AssessmentServiceServicer(assessment_pb2_grpc.AssessmentServiceServicer):
             pattern_obj.severity = p["severity"]
             
         return response
+
