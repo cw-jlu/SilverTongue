@@ -59,6 +59,15 @@ jwt:
   secret: SilverTongue_JWT_Secret_Key_2026_Very_Long_And_Secure
   expiration: 86400000  # 24 小时 (毫秒)
 
+# ===== WeChat OAuth2 =====
+wechat:
+  app-id: wx_your_app_id        # TODO: 填写微信公众号 AppID
+  app-secret: wx_your_app_secret # TODO: 填写微信公众号 AppSecret
+  oauth2:
+    authorize-url: https://open.weixin.qq.com/connect/oauth2/authorize
+    access-token-url: https://api.weixin.qq.com/sns/oauth2/access_token
+    user-info-url: https://api.weixin.qq.com/sns/userinfo
+
 # ===== Actuator + Prometheus 监控 (从第一天就暴露) =====
 management:
   endpoints:

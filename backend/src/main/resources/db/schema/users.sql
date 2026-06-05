@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS users (
+    id BIGINT NOT NULL COMMENT 'Snowflake user ID',
+    username VARCHAR(64) NOT NULL COMMENT 'Login username',
+    password VARCHAR(128) NOT NULL COMMENT 'BCrypt password hash',
+    nickname VARCHAR(64) NOT NULL COMMENT 'Display nickname',
+    avatar_url VARCHAR(256) NULL COMMENT 'Avatar URL',
+    points BIGINT NOT NULL DEFAULT 0 COMMENT 'Current points',
+    level VARCHAR(20) NOT NULL DEFAULT 'beginner' COMMENT 'English level',
+    sign_in_count INT NOT NULL DEFAULT 0 COMMENT 'Total sign-in count',
+    wx_openid VARCHAR(64) NULL COMMENT 'WeChat OpenID',
+    wx_unionid VARCHAR(64) NULL COMMENT 'WeChat UnionID',
+    status TINYINT NOT NULL DEFAULT 0 COMMENT '0 normal, 1 disabled, 2 deleted',
+    disabled_time DATETIME NULL COMMENT 'Disabled time',
+    deleted_time DATETIME NULL COMMENT 'Deleted time',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created time',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Updated time',
+    deleted TINYINT NOT NULL DEFAULT 0 COMMENT 'MyBatis-Plus logical delete flag',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_users_username (username),
+    UNIQUE KEY uk_users_wx_unionid (wx_unionid),
+    KEY idx_users_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='User basic profile';
