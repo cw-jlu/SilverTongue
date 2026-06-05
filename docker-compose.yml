@@ -1,0 +1,139 @@
+version: '3.9'
+
+services:
+  # ==================== 基础设施层 ====================
+  mysql:
+    image: mysql:8.0
+    container_name: st-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: silvertongue_root
+      MYSQL_DATABASE: silvertongue
+      MYSQL_USER: st_user
+      MYSQL_PASSWORD: st_pass_2026
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: st-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: st-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: silvertongue
+      MINIO_ROOT_PASSWORD: silvertongue_minio
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    volumes:
+      - minio_data:/data
+
+  elasticsearch:
+    image: elasticsearch:8.11.0
+    container_name: st-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+
+  # ==================== 业务服务层 ====================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: st-backend
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/silvertongue?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: st_user
+      SPRING_DATASOURCE_PASSWORD: st_pass_2026
+      SPRING_REDIS_HOST: redis
+      MINIO_ENDPOINT: http://minio:9000
+      GRPC_AGENT_HOST: ai-agent
+      GRPC_AGENT_PORT: 50051
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  ai-agent:
+    build:
+      context: ./ai-agent
+      dockerfile: Dockerfile
+    container_name: st-ai-agent
+    ports:
+      - "50051:50051"   # gRPC
+      - "8089:8089"     # FastAPI health/metrics
+    environment:
+      REDIS_URL: redis://redis:6379/3
+      MILVUS_HOST: milvus-standalone
+      MILVUS_PORT: 19530
+    depends_on:
+      - redis
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: st-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  # ==================== 监控层 ====================
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: st-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - backend
+      - ai-agent
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: st-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: silvertongue
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  mysql_data:
+  redis_data:
+  minio_data:
+  es_data:
+  grafana_data:

@@ -1,0 +1,70 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: silvertongue-backend
+
+  # ===== MySQL =====
+  datasource:
+    url: jdbc:mysql://localhost:3306/silvertongue?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: st_user
+    password: st_pass_2026
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # ===== Redis =====
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+
+    # ===== Elasticsearch =====
+    elasticsearch:
+      uris: http://localhost:9200
+
+# ===== MyBatis-Plus =====
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: ASSIGN_ID
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# ===== MinIO =====
+minio:
+  endpoint: http://localhost:9000
+  access-key: silvertongue
+  secret-key: silvertongue_minio
+  buckets:
+    materials: st-materials
+    recordings: st-recordings
+    ai-voices: st-ai-voices
+    transcripts: st-transcripts
+    assets: st-assets
+
+# ===== gRPC Agent 连接 =====
+grpc:
+  agent:
+    host: localhost
+    port: 50051
+
+# ===== JWT =====
+jwt:
+  secret: SilverTongue_JWT_Secret_Key_2026_Very_Long_And_Secure
+  expiration: 86400000  # 24 小时 (毫秒)
+
+# ===== Actuator + Prometheus 监控 (从第一天就暴露) =====
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  metrics:
+    tags:
+      application: ${spring.application.name}

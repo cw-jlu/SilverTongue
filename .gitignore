@@ -1,0 +1,46 @@
+# ===== Java / Spring Boot =====
+backend/target/
+backend/*.jar
+backend/.mvn/
+backend/mvnw
+backend/mvnw.cmd
+
+# ===== Python =====
+ai-agent/__pycache__/
+ai-agent/**/__pycache__/
+ai-agent/*.pyc
+ai-agent/.venv/
+ai-agent/venv/
+ai-agent/*.egg-info/
+ai-agent/dist/
+ai-agent/build/
+ai-agent/models/         # 大模型权重文件（不入仓库）
+
+# ===== Node / Frontend =====
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+
+# ===== gRPC Generated =====
+backend/src/main/java/com/silvertongue/grpc/generated/
+ai-agent/proto/*_pb2.py
+ai-agent/proto/*_pb2_grpc.py
+
+# ===== IDE =====
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== Docker =====
+*.log
+docker-compose.override.yml
+
+# ===== Environment =====
+.env
+*.env.local

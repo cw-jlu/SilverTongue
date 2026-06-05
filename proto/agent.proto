@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package silvertongue.agent;
+
+option java_multiple_files = true;
+option java_package = "com.silvertongue.grpc.agent";
+option java_outer_classname = "AgentProto";
+
+// 智能体交互服务 - Spring Boot 调用 Python Agent
+service AgentService {
+  // 开启 AI 对练会话
+  rpc StartSession(StartSessionRequest) returns (StartSessionResponse);
+
+  // 语音对话流 (双向流传输音频及状态)
+  rpc ChatStream(stream ChatStreamRequest) returns (stream ChatStreamResponse);
+
+  // 卡壳时的引导式表达补全
+  rpc GetScaffolding(ScaffoldingRequest) returns (ScaffoldingResponse);
+}
+
+message StartSessionRequest {
+  string user_id = 1;
+  string session_id = 2;
+  string mode = 3;         // full_duplex, half_duplex, guided, free_talk
+  string user_level = 4;   // CEFR 等级
+  string topic = 5;        // 练习场景主题
+}
+
+message StartSessionResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message ChatStreamRequest {
+  string session_id = 1;
+  bytes audio_chunk = 2;       // 输入音频 PCM 字节流
+  bool is_final_chunk = 3;     // 是否为本次说话的最后一包
+  float energy_level = 4;      // 实时音频能量 (辅助话权判定)
+  float silence_duration = 5;  // 持续静默时长 (秒)
+}
+
+message ChatStreamResponse {
+  string text_delta = 1;           // 助手回复文本增量
+  bytes audio_chunk = 2;           // 助手回复音频 PCM 字节流
+  bool is_finished = 3;            // 本轮是否结束
+  ChinglishAnalysis chinglish = 4; // 实时中式英语纠错
+  string refined_text = 5;         // 地道表达推荐
+}
+
+message ChinglishAnalysis {
+  bool has_chinglish = 1;
+  string original_pattern = 2;
+  string suggestion = 3;
+  string severity = 4; // low, medium, high
+}
+
+message ScaffoldingRequest {
+  string session_id = 1;
+  string incomplete_text = 2;
+}
+
+message ScaffoldingResponse {
+  repeated string completion_hints = 1;
+}

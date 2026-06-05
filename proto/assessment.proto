@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package silvertongue.assessment;
+
+option java_multiple_files = true;
+option java_package = "com.silvertongue.grpc.assessment";
+option java_outer_classname = "AssessmentProto";
+
+// 发音评估与纠错分析服务
+service AssessmentService {
+  // 发音评估 (MFA + 云端双引擎)
+  rpc AssessPronunciation(AssessRequest) returns (AssessResponse);
+
+  // 中式英语与语法检测
+  rpc DetectChinglish(ChinglishRequest) returns (ChinglishResponse);
+}
+
+message AssessRequest {
+  string user_id = 1;
+  bytes audio_data = 2;       // 跟读音频文件
+  string target_text = 3;     // 跟读目标文本
+}
+
+message AssessResponse {
+  float final_score = 1;
+  float accuracy = 2;
+  float fluency = 3;
+  float completeness = 4;
+  repeated WordAssessment words = 5;
+}
+
+message WordAssessment {
+  string word = 1;
+  float score = 2;
+  repeated PhonemeDetail phonemes = 3;
+}
+
+message PhonemeDetail {
+  string phoneme = 1;
+  float score = 2;
+  double start_time = 3;
+  double end_time = 4;
+}
+
+message ChinglishRequest {
+  string text = 1;
+}
+
+message ChinglishResponse {
+  bool has_chinglish = 1;
+  repeated ErrorPattern patterns = 2;
+}
+
+message ErrorPattern {
+  string category = 1;
+  string error_text = 2;
+  string suggestion = 3;
+}
