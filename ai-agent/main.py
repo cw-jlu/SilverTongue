@@ -52,6 +52,12 @@ class HealthServicer(health_pb2_grpc.HealthServicer):
     def Watch(self, request, context):
         context.abort(grpc.StatusCode.UNIMPLEMENTED, "Watch is not implemented")
 
+# Import our custom servicers
+from services.agent_service import AgentServiceServicer
+from services.assessment_service import AssessmentServiceServicer
+import agent_pb2_grpc
+import assessment_pb2_grpc
+
 # ==========================================
 # 5. Service Startup
 # ==========================================
@@ -61,9 +67,9 @@ async def serve_grpc():
     # Register Health Check
     health_pb2_grpc.add_HealthServicer_to_server(HealthServicer(), server)
     
-    # TODO: Register AgentService and AssessmentService here
-    # agent_pb2_grpc.add_AgentServiceServicer_to_server(AgentService(), server)
-    # assessment_pb2_grpc.add_AssessmentServiceServicer_to_server(AssessmentService(), server)
+    # Register AgentService and AssessmentService
+    agent_pb2_grpc.add_AgentServiceServicer_to_server(AgentServiceServicer(), server)
+    assessment_pb2_grpc.add_AssessmentServiceServicer_to_server(AssessmentServiceServicer(), server)
     
     listen_addr = '[::]:50051'
     server.add_insecure_port(listen_addr)
