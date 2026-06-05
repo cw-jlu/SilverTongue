@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS rooms (
+    id BIGINT NOT NULL COMMENT 'Snowflake ID',
+    creator_id BIGINT NOT NULL COMMENT '房主 ID',
+    room_name VARCHAR(128) NOT NULL COMMENT '房间名',
+    max_users INT NOT NULL DEFAULT 10 COMMENT '容纳人数',
+    status TINYINT NOT NULL DEFAULT 0 COMMENT '0: 活跃, 1: 关闭',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Meeting 语音房';
