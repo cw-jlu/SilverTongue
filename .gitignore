@@ -1,5 +1,6 @@
 # ===== Java / Spring Boot =====
 backend/target/
+backend/.m2/
 backend/*.jar
 backend/.mvn/
 backend/mvnw
