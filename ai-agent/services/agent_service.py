@@ -62,8 +62,34 @@ class AgentServiceServicer(agent_pb2_grpc.AgentServiceServicer):
                 
     def GetScaffolding(self, request, context):
         """
-        M15: Guided completion (placeholder for now)
+        M15: Guided completion (Scaffolding Engine)
+        Generates contextual hints based on user's CEFR level.
         """
+        logger.info(f"Generating scaffolding for user {request.user_id} with CEFR level: {request.user_level}")
+        
+        level = request.user_level.upper()
+        suggestions = []
+        
+        # Mock logic based on CEFR level
+        if level in ["A1", "A2"]:
+            suggestions = [
+                "I think we should...",
+                "Could you please repeat that?",
+                "I agree with you."
+            ]
+        elif level in ["B1", "B2"]:
+            suggestions = [
+                "From my perspective, this means...",
+                "I'm not entirely sure, but I guess...",
+                "That's an interesting point, furthermore..."
+            ]
+        else: # C1, C2
+            suggestions = [
+                "To elaborate on that specific aspect...",
+                "Conversely, one might argue that...",
+                "Given the current circumstances, it's evident that..."
+            ]
+            
         return agent_pb2.ScaffoldingResponse(
-            suggestions=["Could you repeat that?", "I think we should..."]
+            suggestions=suggestions
         )
