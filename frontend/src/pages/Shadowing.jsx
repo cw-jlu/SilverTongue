@@ -2,8 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import api from '../api/client';
 import WaveSurfer from 'wavesurfer.js';
 import Regions from 'wavesurfer.js/dist/plugins/regions.js';
-import { useAudioRecorder } from 'react-audio-voice-recorder';
-import { LiveAudioVisualizer } from 'react-audio-visualize';
+import { useAudioRecorder } from '../lib/useAudioRecorder';
+import { LiveAudioVisualizer } from '../lib/AudioVisualizer';
 import {
   Panel,
   PanelGroup,

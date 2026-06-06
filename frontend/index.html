@@ -6,6 +6,20 @@
     <title>SilverTongue — AI 口语陪练</title>
   </head>
   <body>
+    <div id="error-display" style="color:red; font-size:20px; white-space:pre-wrap; font-family:monospace;"></div>
+    <script>
+      window.onerror = function(message, source, lineno, colno, error) {
+        document.getElementById('error-display').innerText += "Error: " + message + "\n";
+      };
+      window.addEventListener("unhandledrejection", function(event) {
+        document.getElementById('error-display').innerText += "Unhandled Promise Rejection: " + (event.reason ? event.reason.toString() : 'Unknown') + "\n";
+      });
+      const originalConsoleError = console.error;
+      console.error = function(...args) {
+        document.getElementById('error-display').innerText += "Console Error: " + args.join(' ') + "\n";
+        originalConsoleError.apply(console, args);
+      };
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
