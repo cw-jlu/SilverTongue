@@ -22,6 +22,11 @@ public class PracticeSession {
     /** full_duplex, half_duplex, guided, free_talk */
     private String mode;
 
+    /** 角色/场景 (例如: 雅思考官, 自由对话) */
+    private String topic;
+
+    private String contextFileUrl;
+
     /** 0: 进行中, 1: 已完成 */
     private Integer status;
 
