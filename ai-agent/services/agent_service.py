@@ -1,9 +1,17 @@
+"""
+AgentService gRPC Servicer
+============================
+Implements the AgentService defined in agent.proto.
+All audio flows through the Kafka-backed STT pipeline.
+"""
+
 import grpc
 from loguru import logger
 import sys
 import os
 import json
 import time
+import uuid
 import redis
 
 # Add proto to path
@@ -29,15 +37,24 @@ def _get_redis():
     return _redis_client
 
 
+# These will be injected from main.py
+_audio_pipeline = None
+_conversation_store = None
+
+def configure_agent_service(audio_pipeline, conversation_store):
+    """Inject runtime dependencies."""
+    global _audio_pipeline, _conversation_store
+    _audio_pipeline = audio_pipeline
+    _conversation_store = conversation_store
+
+
 class AgentServiceServicer(agent_pb2_grpc.AgentServiceServicer):
 
     @grpc_metric("AgentService")
     def StartSession(self, request, context):
-        """
-        Start session and persist settings (user_id, level, topic, mode) to Redis.
-        """
+        """Start session and persist settings to Redis."""
         logger.info(f"Starting session {request.session_id} for user {request.user_id}")
-        
+
         r = _get_redis()
         if r:
             try:
@@ -48,151 +65,168 @@ class AgentServiceServicer(agent_pb2_grpc.AgentServiceServicer):
                     "mode": request.mode,
                     "created_at": time.time()
                 }
-                r.set(f"session:{request.session_id}", json.dumps(session_data), ex=86400) # Expire in 24h
+                r.set(f"session:{request.session_id}", json.dumps(session_data), ex=86400)
             except Exception as e:
-                logger.error(f"Failed to save session settings to Redis: {e}")
+                logger.error(f"Failed to save session to Redis: {e}")
                 return agent_pb2.StartSessionResponse(success=False, error_message=str(e))
-                
+
         return agent_pb2.StartSessionResponse(success=True)
 
     @grpc_metric("AgentService")
     def ChatStream(self, request_iterator, context):
         """
         Bidirectional stream for real-time chat.
-        Accumulates audio chunks, transcribes them when final, runs the agent graph,
-        and streams back text chunks.
+        All audio ALWAYS goes through STT (even if model supports voice),
+        because text must be displayed on frontend and persisted in ES.
         """
         r = _get_redis()
-        
+        audio_buffer = bytearray()
+        session_id = ""
+
         for request in request_iterator:
-            logger.info(f"Received audio chunk for session {request.session_id}")
-            
-            # Here we accumulate audio bytes.
-            # In a production app, we would write audio to a temp file and run ASR.
-            # For our simulation, we mock the transcription when is_final_chunk is true.
+            session_id = request.session_id
+            audio_buffer.extend(request.audio_chunk)
+
             if not request.is_final_chunk:
                 continue
-                
+
+            # ---- Final chunk received — process the complete utterance ----
             start_inference = time.time()
-            
-            # Fetch session metadata from Redis
+
+            # Fetch session metadata
             user_id = "unknown"
             user_level = "intermediate"
             topic = "free talk"
-            
+
             if r:
                 try:
-                    raw_data = r.get(f"session:{request.session_id}")
-                    if raw_data:
-                        data = json.loads(raw_data)
+                    raw = r.get(f"session:{session_id}")
+                    if raw:
+                        data = json.loads(raw)
                         user_id = data.get("user_id", "unknown")
                         user_level = data.get("user_level", "intermediate")
                         topic = data.get("topic", "free talk")
                 except Exception as e:
                     logger.error(f"Error loading session metadata: {e}")
-            
-            # Deterministic mock user transcript:
-            # We use a Chinglish sentence on the first turn to demonstrate error correction!
-            user_transcript = "I very like English and want to improve my spoken skills."
-            
-            # Run LangGraph with the transcribed text
+
+            # Produce audio to Kafka for async STT (ES persistence handled there)
+            if _audio_pipeline and bytes(audio_buffer):
+                _audio_pipeline.produce(bytes(audio_buffer), session_id, user_id)
+
+            # Run the full LangGraph pipeline
+            # (transcribe_audio node will also STT synchronously for immediate reply)
             state = {
-                "session_id": request.session_id,
+                "session_id": session_id,
                 "user_id": user_id,
                 "user_level": user_level,
                 "topic": topic,
-                "messages": [{"role": "user", "content": user_transcript, "audio_url": None}]
+                "mode": "full_duplex",
+                "current_audio_buffer": bytes(audio_buffer),
+                "is_user_speaking": False,
+                "turn_taken": True,
+                "messages": [],
+                "chinglish_analysis": {},
+                "refined_text": None,
+                "user_transcript": "",
+                "response_audio": b"",
+                "selected_provider": "",
+                "model_capability": "text_only",
+                "next_node": "",
             }
-            
+
             try:
                 result_state = agent_graph.invoke(state)
-                
+
                 # Get the last AI message
-                agent_msg = next((m for m in reversed(result_state.get('messages', [])) if m['role'] == 'agent'), None)
-                reply_text = agent_msg['content'] if agent_msg else "I couldn't generate a reply."
-                
-                # Get chinglish analysis
-                chinglish_data = result_state.get('chinglish_analysis', None)
+                agent_msg = next(
+                    (m for m in reversed(result_state.get("messages", [])) if m["role"] == "agent"),
+                    None,
+                )
+                reply_text = agent_msg["content"] if agent_msg else "I couldn't generate a reply."
+                reply_audio = result_state.get("response_audio", b"")
+                model_cap = result_state.get("model_capability", "text_only")
+
+                # Chinglish analysis
+                chinglish_data = result_state.get("chinglish_analysis")
                 chinglish_pb = None
-                
                 if chinglish_data and chinglish_data.get("has_chinglish"):
                     patterns = chinglish_data.get("patterns", [])
-                    first_pattern = patterns[0] if patterns else {}
+                    first = patterns[0] if patterns else {}
                     chinglish_pb = agent_pb2.ChinglishAnalysis(
                         has_chinglish=True,
-                        original_pattern=first_pattern.get("error_text", ""),
-                        suggestion=first_pattern.get("suggestion", ""),
-                        severity=first_pattern.get("severity", "medium")
+                        original_pattern=first.get("error_text", ""),
+                        suggestion=first.get("suggestion", ""),
+                        severity=first.get("severity", "medium"),
                     )
-                
-                refined_text = result_state.get("refined_text", "")
-                
+
+                refined = result_state.get("refined_text", "") or ""
+
                 # Record TTFT latency
-                ttft_duration = time.time() - start_inference
-                AI_INFERENCE_TTFT_LATENCY.labels(model_name="qwen-2.5-omni").observe(ttft_duration)
-                
-                # Simulate streaming of the reply text
+                ttft = time.time() - start_inference
+                provider_name = result_state.get("selected_provider", "unknown")
+                AI_INFERENCE_TTFT_LATENCY.labels(model_name=provider_name).observe(ttft)
+
+                # Stream the reply text word-by-word
                 words = reply_text.split(" ")
                 for i, w in enumerate(words):
                     is_last = (i == len(words) - 1)
-                    # Add space back
                     delta = w if is_last else w + " "
-                    
+
                     yield agent_pb2.ChatStreamResponse(
                         text_delta=delta,
-                        audio_chunk=b"",
+                        audio_chunk=reply_audio if is_last else b"",
                         is_finished=is_last,
                         chinglish=chinglish_pb if is_last else None,
-                        refined_text=refined_text if is_last else ""
+                        refined_text=refined if is_last else "",
                     )
-                    time.sleep(0.05) # simulate network/generation streaming delay
-                    
+                    time.sleep(0.03)
+
             except Exception as e:
                 logger.error(f"Error running LangGraph: {e}")
                 context.abort(grpc.StatusCode.INTERNAL, str(e))
 
+            # Reset buffer for the next utterance
+            audio_buffer = bytearray()
+
     @grpc_metric("AgentService")
     def GetScaffolding(self, request, context):
         """
-        M15: Guided completion (Scaffolding Engine)
+        M15: Guided completion (Scaffolding Engine).
         Generates contextual hints based on user's CEFR level and session topic.
         """
-        logger.info(f"Generating scaffolding for session {request.session_id}, incomplete: '{request.incomplete_text}'")
-        
+        logger.info(f"Generating scaffolding for session {request.session_id}")
+
         r = _get_redis()
         user_level = "B1"
         if r:
             try:
-                raw_data = r.get(f"session:{request.session_id}")
-                if raw_data:
-                    data = json.loads(raw_data)
+                raw = r.get(f"session:{request.session_id}")
+                if raw:
+                    data = json.loads(raw)
                     user_level = data.get("user_level", "B1")
             except Exception as e:
                 logger.error(f"Failed to fetch session level: {e}")
-                
+
         level = user_level.upper()
-        suggestions = []
-        
-        # Rule-based suggestions based on CEFR level
-        if level in ["A1", "A2"]:
-            suggestions = [
-                f"{request.incomplete_text} and I like it.",
-                f"{request.incomplete_text} because it is fun.",
-                f"{request.incomplete_text} with my friends."
+        prefix = request.incomplete_text
+
+        if level in ("A1", "A2"):
+            hints = [
+                f"{prefix} and I like it.",
+                f"{prefix} because it is fun.",
+                f"{prefix} with my friends.",
             ]
-        elif level in ["B1", "B2"]:
-            suggestions = [
-                f"{request.incomplete_text}, which provides a great opportunity to learn.",
-                f"{request.incomplete_text} from my own personal perspective.",
-                f"{request.incomplete_text}, although there are some challenges involved."
+        elif level in ("B1", "B2"):
+            hints = [
+                f"{prefix}, which provides a great opportunity to learn.",
+                f"{prefix} from my own personal perspective.",
+                f"{prefix}, although there are some challenges involved.",
             ]
-        else: # C1, C2
-            suggestions = [
-                f"{request.incomplete_text}, thereby facilitating a deeper understanding of the subject matter.",
-                f"{request.incomplete_text}, which is fundamentally critical to achieving long-term efficacy.",
-                f"{request.incomplete_text}, conversely leading to several unintended consequences."
+        else:
+            hints = [
+                f"{prefix}, thereby facilitating a deeper understanding of the subject matter.",
+                f"{prefix}, which is fundamentally critical to achieving long-term efficacy.",
+                f"{prefix}, conversely leading to several unintended consequences.",
             ]
-            
-        return agent_pb2.ScaffoldingResponse(
-            completion_hints=suggestions
-        )
+
+        return agent_pb2.ScaffoldingResponse(completion_hints=hints)
