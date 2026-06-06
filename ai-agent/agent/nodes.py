@@ -183,10 +183,16 @@ def _build_system_prompt(state: AgentState) -> str:
         )
         chinglish_section = f"\nChinglish detected: {corrections}\nGently address these."
 
-    return SYSTEM_PROMPT.format(
+    system_content = SYSTEM_PROMPT.format(
         user_level=user_level, topic=detailed_topic,
         rag_section=rag_section, chinglish_section=chinglish_section,
     )
+
+    context_text = state.get("context_text")
+    if context_text:
+        system_content += f"\n\nHere is the background document provided by the user (e.g. resume, menu):\n<Document>\n{context_text}\n</Document>\n"
+
+    return system_content
 
 
 def _build_chat_messages(state: AgentState) -> List[Dict[str, str]]:

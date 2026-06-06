@@ -25,6 +25,7 @@ class AgentState(TypedDict):
     mode: str           # full_duplex, half_duplex, guided, free_talk
     user_level: str     # CEFR level (beginner, advanced, etc.)
     topic: str          # Conversation topic/scenario
+    context_text: Optional[str] # Parsed context text from uploaded files (resume, menu, etc)
     
     # Conversation History
     messages: Annotated[List[Message], merge_messages]

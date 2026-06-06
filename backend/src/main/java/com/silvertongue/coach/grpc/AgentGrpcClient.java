@@ -28,19 +28,25 @@ public class AgentGrpcClient {
      * @param mode      交互模式 (full_duplex, half_duplex, guided, free_talk)
      * @param userLevel CEFR 等级 (如 B2)
      * @param topic     角色/场景 (如 "雅思考官", "日常闲聊")
+     * @param contextFileUrl 场景辅助材料URL
      * @return 是否开启成功
      */
-    public boolean startSession(String userId, String sessionId, String mode, String userLevel, String topic) {
-        StartSessionRequest request = StartSessionRequest.newBuilder()
+    public boolean startSession(String userId, String sessionId, String mode, String userLevel, String topic, String contextFileUrl) {
+        StartSessionRequest.Builder requestBuilder = StartSessionRequest.newBuilder()
                 .setUserId(userId)
                 .setSessionId(sessionId)
                 .setMode(mode)
                 .setUserLevel(userLevel)
-                .setTopic(topic)
-                .build();
+                .setTopic(topic);
+                
+        if (contextFileUrl != null && !contextFileUrl.isBlank()) {
+            requestBuilder.setContextFileUrl(contextFileUrl);
+        }
+        
+        StartSessionRequest request = requestBuilder.build();
 
-        log.info("Calling gRPC StartSession: userId={}, sessionId={}, mode={}, level={}, topic={}",
-                userId, sessionId, mode, userLevel, topic);
+        log.info("Calling gRPC StartSession: userId={}, sessionId={}, mode={}, level={}, topic={}, contextFileUrl={}",
+                userId, sessionId, mode, userLevel, topic, contextFileUrl);
 
         try {
             StartSessionResponse response = stub.startSession(request);

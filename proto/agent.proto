@@ -24,6 +24,7 @@ message StartSessionRequest {
   string mode = 3;         // full_duplex, half_duplex, guided, free_talk
   string user_level = 4;   // CEFR 等级
   string topic = 5;        // 练习场景主题
+  string context_file_url = 6; // 场景辅助材料在 MinIO 中的路径
 }
 
 message StartSessionResponse {
