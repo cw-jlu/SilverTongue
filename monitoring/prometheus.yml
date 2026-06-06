@@ -2,6 +2,9 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+rule_files:
+  - "alert.rules.yml"
+
 scrape_configs:
   # Spring Boot Actuator (Micrometer Prometheus)
   - job_name: 'silvertongue-backend'

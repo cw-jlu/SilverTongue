@@ -3,6 +3,7 @@ from loguru import logger
 import sys
 import os
 import json
+import time
 
 # Add proto to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'proto'))
@@ -10,8 +11,10 @@ import agent_pb2
 import agent_pb2_grpc
 
 from agent.graph import agent_graph
+from services.metrics import grpc_metric, AI_INFERENCE_TTFT_LATENCY
 
 class AgentServiceServicer(agent_pb2_grpc.AgentServiceServicer):
+    @grpc_metric("AgentService")
     def StartSession(self, request, context):
         logger.info(f"Starting session {request.session_id} for user {request.user_id}")
         
@@ -23,12 +26,15 @@ class AgentServiceServicer(agent_pb2_grpc.AgentServiceServicer):
             initial_message="Hello, I am SilverTongue AI. How can I help you practice today?"
         )
         
+    @grpc_metric("AgentService")
     def ChatStream(self, request_iterator, context):
         """
         Bidirectional stream for real-time chat.
         """
         for request in request_iterator:
             logger.info(f"Received message for session {request.session_id}: {request.text_content}")
+            
+            start_inference = time.time()
             
             # Prepare state
             state = {
@@ -49,6 +55,10 @@ class AgentServiceServicer(agent_pb2_grpc.AgentServiceServicer):
                 chinglish = result_state.get('chinglish_analysis', None)
                 chinglish_json = json.dumps(chinglish) if chinglish else ""
                 
+                # Record TTFT latency
+                ttft_duration = time.time() - start_inference
+                AI_INFERENCE_TTFT_LATENCY.labels(model_name="qwen-2.5-omni").observe(ttft_duration)
+                
                 yield agent_pb2.ChatStreamResponse(
                     session_id=request.session_id,
                     text_content=reply_text,
@@ -60,6 +70,7 @@ class AgentServiceServicer(agent_pb2_grpc.AgentServiceServicer):
                 logger.error(f"Error running LangGraph: {e}")
                 context.abort(grpc.StatusCode.INTERNAL, str(e))
                 
+    @grpc_metric("AgentService")
     def GetScaffolding(self, request, context):
         """
         M15: Guided completion (Scaffolding Engine)
@@ -93,3 +104,4 @@ class AgentServiceServicer(agent_pb2_grpc.AgentServiceServicer):
         return agent_pb2.ScaffoldingResponse(
             suggestions=suggestions
         )
+

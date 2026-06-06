@@ -1,0 +1,11 @@
+groups:
+  - name: silvertongue-alerts
+    rules:
+      - alert: HighGrpcErrorRate
+        expr: (sum(rate(grpc_requests_total{status!="OK"}[5m])) / sum(rate(grpc_requests_total[5m]))) * 100 > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High gRPC Error Rate detected on SilverTongue"
+          description: "The gRPC error rate is currently {{ $value | printf \"%.2f\" }}%, which is above the 5% threshold."
