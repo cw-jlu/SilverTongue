@@ -9,7 +9,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * <p>
  * 负责用户管理、社区交互、练习会话元数据及 gRPC 客户端调用 AI Agent 服务。
  */
-@MapperScan("com.silvertongue.user.mapper")
+@MapperScan("com.silvertongue.**.mapper")
 @SpringBootApplication
 public class SilverTongueApplication {
 

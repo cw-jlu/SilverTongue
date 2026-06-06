@@ -21,7 +21,7 @@ spring:
 
     # ===== Elasticsearch =====
     elasticsearch:
-      uris: ${ES_URIS:http://localhost:9200}
+      uris: http://localhost:9201
 
 # ===== MyBatis-Plus =====
 mybatis-plus:
