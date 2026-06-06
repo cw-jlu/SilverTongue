@@ -121,7 +121,7 @@ public class FriendshipService {
     public List<FriendVO> listFriends(Long userId) {
         List<Friendship> friendships = friendshipMapper.selectList(new LambdaQueryWrapper<Friendship>()
                 .eq(Friendship::getUserId, userId)
-                .in(Friendship::getStatus, STATUS_ACCEPTED, STATUS_BLOCKED)
+                .eq(Friendship::getStatus, STATUS_ACCEPTED)
                 .orderByDesc(Friendship::getUpdateTime));
 
         if (friendships.isEmpty()) {

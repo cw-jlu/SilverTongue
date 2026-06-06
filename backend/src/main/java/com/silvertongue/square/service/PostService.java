@@ -1,6 +1,7 @@
 package com.silvertongue.square.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.silvertongue.square.document.PostDocument;
@@ -27,6 +28,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -78,7 +80,7 @@ public class PostService {
     }
 
     /**
-     * 帖子详情（含评论）
+     * 帖子详情（含二级树形评论）
      */
     public PostVO detail(Long postId) {
         Post post = postMapper.selectById(postId);
@@ -87,14 +89,78 @@ public class PostService {
         }
         PostVO vo = toVO(post, null);
 
-        // 加载评论
+        // 加载所有评论
         List<Comment> comments = commentMapper.selectList(
                 new LambdaQueryWrapper<Comment>()
                         .eq(Comment::getPostId, postId)
                         .orderByAsc(Comment::getCreateTime));
-        vo.setComments(comments.stream().map(this::toCommentVO).collect(Collectors.toList()));
+
+        // 转换为 VO
+        List<CommentVO> allVOs = comments.stream().map(this::toCommentVO).collect(Collectors.toList());
+
+        // 按 parentId 分组组装二级树
+        Map<Long, List<CommentVO>> childrenMap = allVOs.stream()
+                .filter(c -> c.getParentId() != null)
+                .collect(Collectors.groupingBy(CommentVO::getParentId));
+
+        List<CommentVO> topLevel = new ArrayList<>();
+        for (CommentVO c : allVOs) {
+            if (c.getParentId() == null) {
+                c.setReplies(childrenMap.getOrDefault(c.getId(), List.of()));
+                topLevel.add(c);
+            }
+        }
+        vo.setComments(topLevel);
 
         return vo;
+    }
+
+    /**
+     * 编辑帖子（仅作者可编辑）+ 同步 ES
+     */
+    @Transactional
+    public PostVO update(Long userId, Long postId, PostCreateRequest request) {
+        Post post = postMapper.selectById(postId);
+        if (post == null) {
+            throw new IllegalArgumentException("post not found");
+        }
+        if (!post.getUserId().equals(userId)) {
+            throw new IllegalArgumentException("only the author can edit this post");
+        }
+        post.setContent(request.getContent());
+        post.setClipId(request.getClipId());
+        postMapper.updateById(post);
+
+        // 同步 ES
+        User user = userMapper.selectById(userId);
+        PostDocument doc = PostDocument.builder()
+                .postId(post.getId())
+                .content(post.getContent())
+                .nickname(user != null ? user.getNickname() : "unknown")
+                .build();
+        esTemplate.save(doc);
+
+        return toVO(post, userId);
+    }
+
+    /**
+     * 删除帖子（仅作者可删除）+ 级联删除评论 + 移除 ES 文档
+     */
+    @Transactional
+    public void delete(Long userId, Long postId) {
+        Post post = postMapper.selectById(postId);
+        if (post == null) {
+            throw new IllegalArgumentException("post not found");
+        }
+        if (!post.getUserId().equals(userId)) {
+            throw new IllegalArgumentException("only the author can delete this post");
+        }
+        // 级联删除评论
+        commentMapper.delete(new LambdaUpdateWrapper<Comment>()
+                .eq(Comment::getPostId, postId));
+        postMapper.deleteById(postId);
+        // 移除 ES 文档
+        esTemplate.delete(String.valueOf(postId), PostDocument.class);
     }
 
     /**
@@ -132,7 +198,7 @@ public class PostService {
     }
 
     /**
-     * ES 全文检索
+     * ES 全文检索（保留相关性评分排序）
      */
     public List<PostVO> search(String keyword, int page, int size) {
         Criteria criteria = new Criteria("content").matches(keyword);
@@ -144,8 +210,14 @@ public class PostService {
                 .collect(Collectors.toList());
         if (postIds.isEmpty()) return List.of();
 
-        List<Post> posts = postMapper.selectBatchIds(postIds);
-        return posts.stream().map(p -> toVO(p, null)).collect(Collectors.toList());
+        // 批量查 MySQL，再按 ES 返回的相关性顺序重排
+        Map<Long, Post> postMap = postMapper.selectBatchIds(postIds).stream()
+                .collect(Collectors.toMap(Post::getId, p -> p));
+        return postIds.stream()
+                .map(postMap::get)
+                .filter(Objects::nonNull)
+                .map(p -> toVO(p, null))
+                .collect(Collectors.toList());
     }
 
     private PostVO toVO(Post post, Long currentUserId) {

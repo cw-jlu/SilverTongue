@@ -11,4 +11,6 @@ public class SessionCreateRequest {
 
     @NotBlank(message = "mode must not be blank")
     private String mode;   // full_duplex, half_duplex, guided, free_talk
+
+    private String topic;  // 角色/场景 (可选)
 }

@@ -62,11 +62,15 @@ public class MeetingService {
             throw new IllegalArgumentException("room is full");
         }
 
+        // 写入 MySQL 参与记录
         RoomParticipant participant = new RoomParticipant();
         participant.setRoomId(roomId);
         participant.setUserId(userId);
         participant.setJoinTime(LocalDateTime.now());
         participantMapper.insert(participant);
+
+        // 同步加入 Redis 在线集合
+        redisTemplate.opsForSet().add(ROOM_PREFIX + roomId, userId.toString());
     }
 
     @Transactional
