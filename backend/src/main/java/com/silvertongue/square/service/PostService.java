@@ -28,6 +28,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -197,7 +198,7 @@ public class PostService {
     }
 
     /**
-     * ES 全文检索
+     * ES 全文检索（保留相关性评分排序）
      */
     public List<PostVO> search(String keyword, int page, int size) {
         Criteria criteria = new Criteria("content").matches(keyword);
@@ -209,8 +210,14 @@ public class PostService {
                 .collect(Collectors.toList());
         if (postIds.isEmpty()) return List.of();
 
-        List<Post> posts = postMapper.selectBatchIds(postIds);
-        return posts.stream().map(p -> toVO(p, null)).collect(Collectors.toList());
+        // 批量查 MySQL，再按 ES 返回的相关性顺序重排
+        Map<Long, Post> postMap = postMapper.selectBatchIds(postIds).stream()
+                .collect(Collectors.toMap(Post::getId, p -> p));
+        return postIds.stream()
+                .map(postMap::get)
+                .filter(Objects::nonNull)
+                .map(p -> toVO(p, null))
+                .collect(Collectors.toList());
     }
 
     private PostVO toVO(Post post, Long currentUserId) {
