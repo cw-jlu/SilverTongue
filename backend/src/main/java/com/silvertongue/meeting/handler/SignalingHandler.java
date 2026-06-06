@@ -9,6 +9,7 @@ import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
+import com.silvertongue.meeting.service.MeetingService;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,9 +28,11 @@ public class SignalingHandler extends TextWebSocketHandler {
     private final Map<String, Long> userRooms = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final RedisTemplate<String, String> redisTemplate;
+    private final MeetingService meetingService;
 
-    public SignalingHandler(RedisTemplate<String, String> redisTemplate) {
+    public SignalingHandler(RedisTemplate<String, String> redisTemplate, MeetingService meetingService) {
         this.redisTemplate = redisTemplate;
+        this.meetingService = meetingService;
     }
 
     @Override
@@ -87,7 +90,12 @@ public class SignalingHandler extends TextWebSocketHandler {
             java.util.concurrent.CompletableFuture.runAsync(() -> {
                 if (!sessions.containsKey(userId)) {
                     userRooms.remove(userId);
-                    redisTemplate.opsForSet().remove(ROOM_PREFIX + roomId, userId);
+                    try {
+                        long uid = Long.parseLong(userId);
+                        meetingService.leaveRoom(roomId, uid);
+                    } catch (NumberFormatException e) {
+                        redisTemplate.opsForSet().remove(ROOM_PREFIX + roomId, userId);
+                    }
                     broadcastToRoom(roomId, buildMsg("user-left", roomId, userId));
                     log.info("User {} disconnected for 3 seconds, automatically removed from room {}", userId, roomId);
                 }
