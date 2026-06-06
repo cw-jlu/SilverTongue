@@ -3,6 +3,8 @@ package com.silvertongue.coach.grpc;
 import com.silvertongue.grpc.agent.AgentServiceGrpc;
 import com.silvertongue.grpc.agent.StartSessionRequest;
 import com.silvertongue.grpc.agent.StartSessionResponse;
+import com.silvertongue.grpc.agent.ScaffoldingRequest;
+import com.silvertongue.grpc.agent.ScaffoldingResponse;
 import io.grpc.ManagedChannel;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -60,6 +62,27 @@ public class AgentGrpcClient {
         } catch (Exception e) {
             log.error("gRPC StartSession call threw exception for session: {}", sessionId, e);
             return false;
+        }
+    }
+
+    /**
+     * 获取卡壳补全提示
+     * @param sessionId 会话 ID
+     * @param incompleteText 不完整的文本
+     * @return 补全提示列表
+     */
+    public java.util.List<String> getScaffolding(String sessionId, String incompleteText) {
+        ScaffoldingRequest request = ScaffoldingRequest.newBuilder()
+                .setSessionId(sessionId)
+                .setIncompleteText(incompleteText)
+                .build();
+                
+        try {
+            ScaffoldingResponse response = stub.getScaffolding(request);
+            return response.getCompletionHintsList();
+        } catch (Exception e) {
+            log.error("gRPC GetScaffolding call threw exception for session: {}", sessionId, e);
+            return java.util.Collections.emptyList();
         }
     }
 }
