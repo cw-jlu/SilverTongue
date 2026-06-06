@@ -1,0 +1,13 @@
+/* SilverTongue Harvester — content_style.css */
+
+#st-harvest-btn:hover {
+  transform: scale(1.05) !important;
+}
+
+#st-clip-panel input:focus {
+  outline: 2px solid #cba6f7;
+}
+
+#st-submit-clip:hover {
+  opacity: 0.9;
+}

@@ -1,5 +1,6 @@
 package com.silvertongue;
 
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
@@ -8,6 +9,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * <p>
  * 负责用户管理、社区交互、练习会话元数据及 gRPC 客户端调用 AI Agent 服务。
  */
+@MapperScan("com.silvertongue.**.mapper")
 @SpringBootApplication
 public class SilverTongueApplication {
 
