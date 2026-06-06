@@ -146,6 +146,7 @@
 | `user_id` | `BIGINT` | 用户 ID |
 | `type` | `ENUM` | 练习类型 (`shadowing` 影子跟读, `ai_chat` AI 智能对话) |
 | `mode` | `VARCHAR(20)` | 交互模式 (`full_duplex` 全双工语音, `half_duplex` 半双工, `guided` 引导式, `free_talk` 自由对话) |
+| `topic` | `VARCHAR(255)` | 会话主题/角色设定 (例如: `雅思考官`, `外企 HR 面试`) |
 | `status` | `TINYINT` | 会话状态 (`0`: 进行中/活跃, `1`: 已完成/归档) |
 | `create_time` | `DATETIME` | 会话开启时间 |
 | `update_time` | `DATETIME` | 会话状态或进度最近一次更新时间 |
