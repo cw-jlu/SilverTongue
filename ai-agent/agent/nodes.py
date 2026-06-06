@@ -140,18 +140,14 @@ def analyze_chinglish(state: AgentState) -> dict:
 # Node: generate_reply (M9)
 # ===========================
 
-SYSTEM_PROMPT = """You are SilverTongue AI.
-Your role/scenario is: {topic}.
-Please immerse yourself entirely in this character/scenario and help Chinese learners practice spoken English through natural, immersive dialogue.
-
-Guidelines:
-- Do NOT break character under any circumstances.
-- Adjust your language complexity to the learner's CEFR level ({user_level}).
-- Encourage the learner by acknowledging good expressions.
-- If Chinglish patterns are detected, gently correct them while staying in character, and explain the natural alternative.
-- Keep replies concise (2-4 sentences) to maintain a natural conversational flow.
-{rag_section}
-{chinglish_section}"""
+# Load SYSTEM_PROMPT from text file
+_PROMPT_FILE_PATH = os.path.join(os.path.dirname(__file__), "system_prompt.txt")
+try:
+    with open(_PROMPT_FILE_PATH, "r", encoding="utf-8") as f:
+        SYSTEM_PROMPT = f.read()
+except Exception as e:
+    logger.error(f"Failed to load system_prompt.txt: {e}")
+    SYSTEM_PROMPT = "You are SilverTongue AI. Your role/scenario is: {topic}. {rag_section} {chinglish_section}"
 
 
 def _build_system_prompt(state: AgentState) -> str:
