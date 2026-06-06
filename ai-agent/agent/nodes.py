@@ -140,6 +140,8 @@ def analyze_chinglish(state: AgentState) -> dict:
 # Node: generate_reply (M9)
 # ===========================
 
+import json
+
 # Load SYSTEM_PROMPT from text file
 _PROMPT_FILE_PATH = os.path.join(os.path.dirname(__file__), "system_prompt.txt")
 try:
@@ -149,10 +151,22 @@ except Exception as e:
     logger.error(f"Failed to load system_prompt.txt: {e}")
     SYSTEM_PROMPT = "You are SilverTongue AI. Your role/scenario is: {topic}. {rag_section} {chinglish_section}"
 
+# Load detailed role descriptions
+_ROLES_FILE_PATH = os.path.join(os.path.dirname(__file__), "roles.json")
+try:
+    with open(_ROLES_FILE_PATH, "r", encoding="utf-8") as f:
+        PRESET_ROLES = json.load(f)
+except Exception as e:
+    logger.error(f"Failed to load roles.json: {e}")
+    PRESET_ROLES = {}
+
 
 def _build_system_prompt(state: AgentState) -> str:
     user_level = state.get("user_level", "intermediate")
     topic = state.get("topic", "free talk")
+    
+    # Map topic to detailed role description if it's a preset role
+    detailed_topic = PRESET_ROLES.get(topic, topic)
 
     rag_text = state.get("refined_text") or ""
     rag_section = ""
@@ -170,7 +184,7 @@ def _build_system_prompt(state: AgentState) -> str:
         chinglish_section = f"\nChinglish detected: {corrections}\nGently address these."
 
     return SYSTEM_PROMPT.format(
-        user_level=user_level, topic=topic,
+        user_level=user_level, topic=detailed_topic,
         rag_section=rag_section, chinglish_section=chinglish_section,
     )
 
