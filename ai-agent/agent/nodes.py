@@ -160,6 +160,55 @@ except Exception as e:
     logger.error(f"Failed to load roles.json: {e}")
     PRESET_ROLES = {}
 
+# Load skill definitions
+_SKILLS_FILE_PATH = os.path.join(os.path.dirname(__file__), "skills.json")
+try:
+    with open(_SKILLS_FILE_PATH, "r", encoding="utf-8") as f:
+        SKILLS_DATA = json.load(f)
+except Exception as e:
+    logger.error(f"Failed to load skills.json: {e}")
+    SKILLS_DATA = {"skills": {}, "scenario_skills": {}, "free_mode_defaults": {"skills": []}}
+
+
+def _resolve_active_skills(state: AgentState) -> List[str]:
+    """
+    Resolve which skills are active for this session.
+
+    Priority:
+    1. If user explicitly provided active_skills (free agent mode), use those
+    2. If topic is a preset scenario, use admin-mapped scenario skills
+    3. Fall back to free_mode_defaults
+    """
+    explicit = state.get("active_skills")
+    if explicit:
+        return explicit
+
+    topic = state.get("topic", "free talk")
+    scenario_map = SKILLS_DATA.get("scenario_skills", {})
+    if topic in scenario_map:
+        return scenario_map[topic]
+
+    return SKILLS_DATA.get("free_mode_defaults", {}).get("skills", [])
+
+
+def _build_skills_section(state: AgentState) -> str:
+    """Build the {skills_section} string from active skills."""
+    active_names = _resolve_active_skills(state)
+    if not active_names:
+        return ""
+
+    all_skills = SKILLS_DATA.get("skills", {})
+    parts = []
+    for name in active_names:
+        skill = all_skills.get(name)
+        if skill and skill.get("prompt_injection"):
+            parts.append(f"[Skill: {skill.get('label', name)}] {skill['prompt_injection']}")
+
+    if not parts:
+        return ""
+
+    return "\n\nActivated Skills:\n" + "\n".join(parts)
+
 
 def _build_system_prompt(state: AgentState) -> str:
     user_level = state.get("user_level", "intermediate")
@@ -183,8 +232,11 @@ def _build_system_prompt(state: AgentState) -> str:
         )
         chinglish_section = f"\nChinglish detected: {corrections}\nGently address these."
 
+    skills_section = _build_skills_section(state)
+
     system_content = SYSTEM_PROMPT.format(
         user_level=user_level, topic=detailed_topic,
+        skills_section=skills_section,
         rag_section=rag_section, chinglish_section=chinglish_section,
     )
 
