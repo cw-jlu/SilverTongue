@@ -225,6 +225,7 @@ class AgentServiceServicer(agent_pb2_grpc.AgentServiceServicer):
                         is_finished=is_last,
                         chinglish=chinglish_pb if is_last else None,
                         refined_text=refined if is_last else "",
+                        user_transcript=result_state.get("user_transcript", "") if is_last else "",
                     )
                     time.sleep(0.03)
 

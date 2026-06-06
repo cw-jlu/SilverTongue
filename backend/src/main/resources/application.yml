@@ -19,9 +19,8 @@ spring:
       port: ${REDIS_PORT:6379}
       database: 0
 
-    # ===== Elasticsearch =====
     elasticsearch:
-      uris: http://localhost:9201
+      uris: ${ES_URIS:http://localhost:9201}
 
 # ===== MyBatis-Plus =====
 mybatis-plus:
@@ -74,6 +73,9 @@ management:
     web:
       exposure:
         include: health,info,prometheus,metrics
+  health:
+    elasticsearch:
+      enabled: false
   metrics:
     tags:
       application: ${spring.application.name}
