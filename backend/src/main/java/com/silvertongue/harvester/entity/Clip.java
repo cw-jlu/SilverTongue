@@ -27,5 +27,8 @@ public class Clip {
 
     private String vectorId;
 
+    /** 0: 待处理, 1: 下载中, 2: 切割中, 3: 已完成, 4: 失败 */
+    private Integer status;
+
     private LocalDateTime createTime;
 }

@@ -3,6 +3,8 @@ package com.silvertongue.harvester.controller;
 import com.silvertongue.common.ApiResult;
 import com.silvertongue.harvester.dto.ClipCreateRequest;
 import com.silvertongue.harvester.dto.ClipVO;
+import com.silvertongue.harvester.dto.HarvestCallbackRequest;
+import com.silvertongue.harvester.dto.HarvestClipRequest;
 import com.silvertongue.harvester.service.ClipService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -48,5 +50,33 @@ public class ClipController {
             @RequestParam(defaultValue = "20") int size
     ) {
         return ApiResult.success(clipService.listAll(page, size));
+    }
+
+    /**
+     * 浏览器插件采集：一键创建 Material + Clip
+     */
+    @PostMapping("/harvest")
+    public ApiResult<ClipVO> harvest(@Valid @RequestBody HarvestClipRequest request) {
+        return ApiResult.success(
+                clipService.harvest(request.getUrl(), request.getPlatform(),
+                        request.getStartTime(), request.getEndTime())
+        );
+    }
+
+    /**
+     * 查询切片处理状态
+     */
+    @GetMapping("/status/{id}")
+    public ApiResult<ClipVO> status(@PathVariable Long id) {
+        return ApiResult.success(clipService.getStatus(id));
+    }
+
+    /**
+     * Python Agent 回调：更新切片状态
+     */
+    @PostMapping("/callback")
+    public ApiResult<String> callback(@RequestBody HarvestCallbackRequest request) {
+        clipService.updateStatus(request.getClipId(), request.getStatus(), request.getStoragePath());
+        return ApiResult.success("ok");
     }
 }

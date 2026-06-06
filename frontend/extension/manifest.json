@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "SilverTongue Harvester",
+  "version": "1.0.0",
+  "description": "一键采集 YouTube / Netflix 语料，自动上传至 SilverTongue 学习平台",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": [
+    "*://*.youtube.com/*",
+    "*://*.netflix.com/*",
+    "*://*.youtu.be/*",
+    "*://localhost:8080/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "SilverTongue - 采集语料"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://*.netflix.com/*",
+        "*://*.youtu.be/*"
+      ],
+      "js": ["content_script.js"],
+      "css": ["content_style.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
