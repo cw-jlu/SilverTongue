@@ -54,8 +54,24 @@ def transcribe_audio(state: AgentState) -> dict:
     logger.info(f"Transcribing audio for session {state['session_id']}")
 
     audio_buffer = state.get("current_audio_buffer", b"")
-    if audio_buffer and _stt_service:
-        transcript = _stt_service.transcribe(audio_buffer)
+    transcript = ""
+    is_text = False
+
+    if audio_buffer:
+        # Check if it is a text message encoded as UTF-8 bytes (less than 10KB)
+        if len(audio_buffer) < 10000:
+            try:
+                decoded = audio_buffer.decode("utf-8")
+                # Heuristic: if it is readable text, bypass STT
+                if decoded and all(ord(c) < 0x10000 for c in decoded):
+                    transcript = decoded
+                    is_text = True
+                    logger.info(f"Detected text input in audio_buffer: {transcript}")
+            except UnicodeDecodeError:
+                pass
+
+        if not is_text and _stt_service:
+            transcript = _stt_service.transcribe(audio_buffer)
     else:
         # Fallback: use existing text from messages
         last_user = next(
