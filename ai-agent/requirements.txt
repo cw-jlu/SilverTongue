@@ -5,6 +5,7 @@ fastapi==0.115.6
 uvicorn[standard]==0.32.1
 grpcio==1.66.0
 grpcio-tools==1.66.0
+grpcio-health-checking==1.66.0
 
 protobuf==5.28.3
 
@@ -26,6 +27,7 @@ kafka-python==2.0.2
 
 # ===== Vector DB =====
 pymilvus==2.4.9
+marshmallow<3.22.0
 
 # ===== Full-text Search =====
 elasticsearch==8.15.0
