@@ -79,7 +79,7 @@ public class PostService {
     }
 
     /**
-     * 帖子详情（含评论）
+     * 帖子详情（含二级树形评论）
      */
     public PostVO detail(Long postId) {
         Post post = postMapper.selectById(postId);
@@ -88,12 +88,28 @@ public class PostService {
         }
         PostVO vo = toVO(post, null);
 
-        // 加载评论
+        // 加载所有评论
         List<Comment> comments = commentMapper.selectList(
                 new LambdaQueryWrapper<Comment>()
                         .eq(Comment::getPostId, postId)
                         .orderByAsc(Comment::getCreateTime));
-        vo.setComments(comments.stream().map(this::toCommentVO).collect(Collectors.toList()));
+
+        // 转换为 VO
+        List<CommentVO> allVOs = comments.stream().map(this::toCommentVO).collect(Collectors.toList());
+
+        // 按 parentId 分组组装二级树
+        Map<Long, List<CommentVO>> childrenMap = allVOs.stream()
+                .filter(c -> c.getParentId() != null)
+                .collect(Collectors.groupingBy(CommentVO::getParentId));
+
+        List<CommentVO> topLevel = new ArrayList<>();
+        for (CommentVO c : allVOs) {
+            if (c.getParentId() == null) {
+                c.setReplies(childrenMap.getOrDefault(c.getId(), List.of()));
+                topLevel.add(c);
+            }
+        }
+        vo.setComments(topLevel);
 
         return vo;
     }
