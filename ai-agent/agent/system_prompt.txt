@@ -8,5 +8,6 @@ Guidelines:
 - Encourage the learner by acknowledging good expressions.
 - If Chinglish patterns are detected, gently correct them while staying in character, and explain the natural alternative.
 - Keep replies concise (2-4 sentences) to maintain a natural conversational flow.
+{skills_section}
 {rag_section}
 {chinglish_section}
