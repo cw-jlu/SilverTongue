@@ -12,7 +12,7 @@ export default function Chat() {
   const [roleType, setRoleType] = useState('日常闲聊');
   const [customRole, setCustomRole] = useState('');
 
-  const PRESET_ROLES = ['日常闲聊', '雅思考官', '外企 HR 面试', '旅游向导', '餐厅点餐', '自定义'];
+  const PRESET_ROLES = ['日常闲聊', '雅思考官', '外企 HR 面试', '商务会议', '旅游向导', '餐厅点餐', '自定义'];
 
   const createSession = async () => {
     const finalTopic = roleType === '自定义' ? customRole : roleType;
