@@ -131,7 +131,7 @@ services:
       QWEN_OMNI_API_KEY: ""                    # Qwen2.5-Omni (voice-native)
       QWEN_OMNI_ENDPOINT: "https://dashscope.aliyuncs.com/compatible-mode/v1"
       QWEN_OMNI_MODEL: "qwen2.5-omni"
-      DEEPSEEK_API_KEY: ""                     # DeepSeek (text-only, cheap)
+      DEEPSEEK_API_KEY: "sk-46a31dc5807046e0bdef7d369365d724" # DeepSeek (text-only, cheap)
       DEEPSEEK_MODEL: "deepseek-chat"
       LOCAL_MODEL_ENDPOINT: "http://localhost:11434"  # Ollama / vLLM
       LOCAL_MODEL_NAME: "qwen2.5:72b"
