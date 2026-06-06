@@ -270,6 +270,9 @@ export default function Login() {
         localStorage.removeItem('rememberedUsername');
       }
       localStorage.setItem('token', res.data.token);
+      if (res.data?.user?.id) {
+        localStorage.setItem('userId', res.data.user.id);
+      }
       navigate('/');
     } catch (err) {
       setError(err?.message || '登录失败，请检查用户名或密码');
