@@ -1,42 +1,87 @@
+"""
+LangGraph Nodes — SilverTongue AI Agent
+=========================================
+Nodes:
+    1. transcribe_audio  — STT 转写用户音频（Kafka 管线或同步 fallback）
+    2. retrieve_context   — M10 RAG 向量检索
+    3. analyze_chinglish   — M11 中式英语检测
+    4. generate_reply      — M9 模型路由 → LLM 生成回复
+    5. synthesize_audio    — TTS 合成（仅 text_only 模型时触发）
+"""
+
 import os
+import uuid
 from typing import Dict, Any, List
 from agent.state import AgentState
 from services.embedding import VectorDBClient
 from services.chinglish_detector import ChinglishDetector
 from loguru import logger
 
-# Initialize clients
+# ---------------------------------------------------------------------------
+# Shared singletons (initialised once at import time)
+# ---------------------------------------------------------------------------
 vector_db = VectorDBClient()
 chinglish_detector = ChinglishDetector()
 
-# ---------------------------------------------------------------------------
-# LLM configuration – supports OpenAI-compatible APIs (e.g. Qwen2.5-Omni)
-# ---------------------------------------------------------------------------
-LLM_API_KEY = os.getenv("LLM_API_KEY", "")
-LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
-LLM_MODEL = os.getenv("LLM_MODEL", "qwen2.5-omni")
+# These will be injected by main.py via configure_nodes()
+_model_router = None
+_stt_service = None
+_tts_service = None
+_conversation_store = None
 
-_openai_client = None
 
-def _get_llm_client():
-    """Lazily initialise the OpenAI-compatible client."""
-    global _openai_client
-    if _openai_client is not None:
-        return _openai_client
-    if not LLM_API_KEY:
-        logger.warning("LLM_API_KEY not set – generate_reply will use fallback mock")
-        return None
-    try:
-        from openai import OpenAI
-        _openai_client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
-        logger.info(f"OpenAI client initialised (base_url={LLM_BASE_URL}, model={LLM_MODEL})")
-        return _openai_client
-    except ImportError:
-        logger.warning("openai package not installed – using fallback mock")
-        return None
-    except Exception as e:
-        logger.error(f"Failed to create OpenAI client: {e}")
-        return None
+def configure_nodes(model_router, stt_service, tts_service, conversation_store):
+    """Inject runtime dependencies. Called once at startup from main.py."""
+    global _model_router, _stt_service, _tts_service, _conversation_store
+    _model_router = model_router
+    _stt_service = stt_service
+    _tts_service = tts_service
+    _conversation_store = conversation_store
+    logger.info("LangGraph nodes configured with router / STT / TTS / ES store")
+
+
+# ===========================
+# Node: transcribe_audio
+# ===========================
+
+def transcribe_audio(state: AgentState) -> dict:
+    """
+    Transcribe user audio to text using the STT service.
+    Even if the model supports native voice, we ALWAYS transcribe for:
+        1. Frontend text display
+        2. ES full-text persistence
+    """
+    logger.info(f"Transcribing audio for session {state['session_id']}")
+
+    audio_buffer = state.get("current_audio_buffer", b"")
+    if audio_buffer and _stt_service:
+        transcript = _stt_service.transcribe(audio_buffer)
+    else:
+        # Fallback: use existing text from messages
+        last_user = next(
+            (m for m in reversed(state.get("messages", [])) if m["role"] == "user"),
+            None,
+        )
+        transcript = last_user["content"] if last_user else ""
+
+    logger.info(f"Transcript: {transcript[:100]}...")
+
+    # Persist user message to ES
+    if _conversation_store and transcript:
+        _conversation_store.persist_message(
+            msg_id=str(uuid.uuid4()),
+            session_id=state.get("session_id", ""),
+            user_id=state.get("user_id", ""),
+            role="user",
+            content=transcript,
+        )
+
+    # Update messages with the transcribed text
+    return {
+        "user_transcript": transcript,
+        "messages": [{"role": "user", "content": transcript, "audio_url": None}],
+        "next_node": "retrieve_context",
+    }
 
 
 # ===========================
@@ -44,23 +89,24 @@ def _get_llm_client():
 # ===========================
 
 def retrieve_context(state: AgentState) -> dict:
-    """
-    Node: Retrieve context from Milvus (M10 RAG)
-    """
+    """Retrieve relevant context from Milvus for RAG."""
     logger.info(f"Retrieving context for session {state['session_id']}")
 
-    last_user_msg = next(
-        (m for m in reversed(state.get('messages', [])) if m['role'] == 'user'),
-        None,
-    )
+    query_text = state.get("user_transcript", "")
+    if not query_text:
+        last_user = next(
+            (m for m in reversed(state.get("messages", [])) if m["role"] == "user"),
+            None,
+        )
+        query_text = last_user["content"] if last_user else ""
 
     rag_context = ""
-    if last_user_msg and vector_db.collection:
-        retrieved = vector_db.search(state.get('user_id', ''), last_user_msg['content'])
+    if query_text and vector_db.collection:
+        retrieved = vector_db.search(state.get("user_id", ""), query_text)
         logger.info(f"Retrieved {len(retrieved)} context chunks from Milvus")
         if retrieved:
             rag_context = "\n".join(
-                f"- {chunk['text']}" for chunk in retrieved if chunk.get('text')
+                f"- {chunk['text']}" for chunk in retrieved if chunk.get("text")
             )
 
     return {"next_node": "analyze_chinglish", "refined_text": rag_context or None}
@@ -71,18 +117,19 @@ def retrieve_context(state: AgentState) -> dict:
 # ===========================
 
 def analyze_chinglish(state: AgentState) -> dict:
-    """
-    Node: Analyze user input for Chinglish patterns (M11)
-    """
+    """Detect Chinglish patterns in the user's input."""
     logger.info(f"Analyzing Chinglish for session {state['session_id']}")
 
-    last_user_msg = next(
-        (m for m in reversed(state.get('messages', [])) if m['role'] == 'user'),
-        None,
-    )
+    query_text = state.get("user_transcript", "")
+    if not query_text:
+        last_user = next(
+            (m for m in reversed(state.get("messages", [])) if m["role"] == "user"),
+            None,
+        )
+        query_text = last_user["content"] if last_user else ""
 
-    if last_user_msg:
-        analysis = chinglish_detector.detect(last_user_msg['content'])
+    if query_text:
+        analysis = chinglish_detector.detect(query_text)
         logger.info(f"Chinglish analysis: {analysis['has_chinglish']}")
         return {"chinglish_analysis": analysis, "next_node": "generate_reply"}
 
@@ -107,17 +154,14 @@ Guidelines:
 
 
 def _build_system_prompt(state: AgentState) -> str:
-    """Build the system prompt with RAG context and Chinglish analysis."""
     user_level = state.get("user_level", "intermediate")
     topic = state.get("topic", "free talk")
 
-    # RAG context
     rag_text = state.get("refined_text") or ""
     rag_section = ""
     if rag_text:
-        rag_section = f"\nRelevant learning materials the student has studied:\n{rag_text}\nTry to reference these materials when appropriate."
+        rag_section = f"\nRelevant learning materials:\n{rag_text}"
 
-    # Chinglish analysis
     chinglish = state.get("chinglish_analysis")
     chinglish_section = ""
     if chinglish and chinglish.get("has_chinglish"):
@@ -126,100 +170,122 @@ def _build_system_prompt(state: AgentState) -> str:
             f'"{p["error_text"]}" → "{p["suggestion"]}" ({p["severity"]})'
             for p in patterns
         )
-        chinglish_section = f"\nThe learner's last message contains Chinglish: {corrections}\nPlease address these gently in your reply."
+        chinglish_section = f"\nChinglish detected: {corrections}\nGently address these."
 
     return SYSTEM_PROMPT.format(
-        user_level=user_level,
-        topic=topic,
-        rag_section=rag_section,
-        chinglish_section=chinglish_section,
+        user_level=user_level, topic=topic,
+        rag_section=rag_section, chinglish_section=chinglish_section,
     )
 
 
 def _build_chat_messages(state: AgentState) -> List[Dict[str, str]]:
-    """Convert agent state messages to OpenAI chat format."""
     system_prompt = _build_system_prompt(state)
     openai_messages = [{"role": "system", "content": system_prompt}]
-
     for msg in state.get("messages", []):
         role = msg["role"]
         if role == "agent":
             role = "assistant"
         openai_messages.append({"role": role, "content": msg["content"]})
-
     return openai_messages
 
 
 def generate_reply(state: AgentState) -> dict:
     """
-    Node: Generate AI reply using LLM (OpenAI-compatible API).
-
-    Falls back to a context-aware mock reply when LLM_API_KEY is not
-    configured, so the full pipeline can be tested end-to-end.
+    Generate AI reply via the ModelRouter.
+    Selects the best available provider based on capability and priority.
     """
     logger.info(f"Generating reply for session {state['session_id']}")
 
-    client = _get_llm_client()
+    if _model_router is None:
+        return {
+            "messages": [{"role": "agent", "content": "[ERROR] Model router not configured", "audio_url": None}],
+            "selected_provider": "none",
+            "model_capability": "text_only",
+            "response_audio": b"",
+            "next_node": "end",
+        }
 
-    if client is not None:
-        try:
-            messages = _build_chat_messages(state)
-            response = client.chat.completions.create(
-                model=LLM_MODEL,
-                messages=messages,
-                temperature=0.7,
-                max_tokens=256,
-            )
-            reply_content = response.choices[0].message.content
-            logger.info("LLM reply generated successfully")
-        except Exception as e:
-            logger.error(f"LLM call failed, falling back to mock: {e}")
-            reply_content = _mock_reply(state)
-    else:
-        reply_content = _mock_reply(state)
+    # Select provider — prefer voice if audio data is available
+    has_audio = bool(state.get("current_audio_buffer", b""))
+    provider = _model_router.select(prefer_voice=has_audio)
 
-    new_message = {"role": "agent", "content": reply_content, "audio_url": None}
+    if provider is None:
+        return {
+            "messages": [{"role": "agent", "content": "[ERROR] No model provider available", "audio_url": None}],
+            "selected_provider": "none",
+            "model_capability": "text_only",
+            "response_audio": b"",
+            "next_node": "end",
+        }
+
+    logger.info(f"Selected provider: {provider.name} ({provider.capability.value})")
+
+    messages = _build_chat_messages(state)
+    audio_input = state.get("current_audio_buffer") if provider.supports_voice else None
+
+    try:
+        response = provider.chat(messages, audio_data=audio_input)
+        reply_text = response.text
+        reply_audio = response.audio_data  # Non-empty only for VOICE_FULL
+    except Exception as e:
+        logger.error(f"Model call failed: {e}")
+        reply_text = f"Sorry, I encountered an error. Could you try again?"
+        reply_audio = b""
+
+    # Persist AI reply to ES
+    if _conversation_store and reply_text:
+        refined = state.get("refined_text", "")
+        _conversation_store.persist_message(
+            msg_id=str(uuid.uuid4()),
+            session_id=state.get("session_id", ""),
+            user_id=state.get("user_id", ""),
+            role="assistant",
+            content=reply_text,
+            refined_content=refined,
+        )
+
+    new_message = {"role": "agent", "content": reply_text, "audio_url": None}
 
     return {
         "messages": [new_message],
+        "selected_provider": provider.name,
+        "model_capability": provider.capability.value,
+        "response_audio": reply_audio,
         "next_node": "end",
     }
 
 
-def _mock_reply(state: AgentState) -> str:
+# ===========================
+# Node: synthesize_audio
+# ===========================
+
+def synthesize_audio(state: AgentState) -> dict:
     """
-    Context-aware mock reply when LLM is unavailable.
-    Uses Chinglish analysis and conversation context to produce
-    a meaningful (though templated) response.
+    TTS synthesis — only runs when the model returned text without audio.
+    Skipped entirely if the provider is voice_full.
     """
-    last_user_msg = next(
-        (m for m in reversed(state.get("messages", [])) if m["role"] == "user"),
+    # If provider already returned audio, skip
+    if state.get("response_audio", b""):
+        logger.info("synthesize_audio: provider already returned audio, skipping TTS")
+        return {"next_node": "end"}
+
+    if _tts_service is None:
+        logger.warning("synthesize_audio: TTS service not available")
+        return {"next_node": "end"}
+
+    last_agent = next(
+        (m for m in reversed(state.get("messages", [])) if m["role"] == "agent"),
         None,
     )
-    user_text = last_user_msg["content"] if last_user_msg else ""
+    if not last_agent:
+        return {"next_node": "end"}
 
-    chinglish = state.get("chinglish_analysis")
-    if chinglish and chinglish.get("has_chinglish"):
-        patterns = chinglish.get("patterns", [])
-        first = patterns[0] if patterns else {}
-        correction = first.get("suggestion", "")
-        error = first.get("error_text", "")
-        return (
-            f"That's a great effort! Just a small note — instead of "
-            f'"{error}", a more natural way to say it would be '
-            f'"{correction}". Keep practicing, you\'re doing well!'
-        )
+    text = last_agent["content"]
+    logger.info(f"Synthesizing audio for reply ({len(text)} chars)")
 
-    topic = state.get("topic", "")
-    if topic:
-        return (
-            f"Interesting point about {topic}! "
-            f"Could you tell me more about what you think? "
-            f"I'd love to hear your perspective."
-        )
-
-    return (
-        "That's a good point! Let me think about that. "
-        "Could you elaborate a bit more on what you mean? "
-        "I want to make sure I understand your perspective correctly."
-    )
+    try:
+        audio_bytes = _tts_service.synthesize(text)
+        return {"response_audio": audio_bytes, "next_node": "end"}
+    except Exception as e:
+        logger.error(f"TTS synthesis failed: {e}")
+        return {"next_node": "end"}

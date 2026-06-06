@@ -38,5 +38,11 @@ class AgentState(TypedDict):
     chinglish_analysis: Dict[str, Any]
     refined_text: Optional[str]
     
+    # Audio pipeline state (new)
+    user_transcript: str            # STT 转写出的用户文本
+    response_audio: bytes           # AI 回复音频（TTS 生成或模型原生返回）
+    selected_provider: str          # 路由选中的模型名称
+    model_capability: str           # text_only / voice_input / voice_full
+    
     # Next step routing
     next_node: str
