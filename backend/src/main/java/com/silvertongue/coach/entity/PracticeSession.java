@@ -30,6 +30,9 @@ public class PracticeSession {
     /** 0: 进行中, 1: 已完成 */
     private Integer status;
 
+    /** 练习时长（秒） */
+    private Integer durationSeconds;
+
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;

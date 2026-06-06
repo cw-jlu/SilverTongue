@@ -20,6 +20,7 @@ public class SessionVO {
     private String topic;
     private String contextFileUrl;
     private Integer status;
+    private Integer durationSeconds;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }
