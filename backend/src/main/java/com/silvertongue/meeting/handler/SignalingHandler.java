@@ -24,6 +24,7 @@ public class SignalingHandler extends TextWebSocketHandler {
 
     private static final String ROOM_PREFIX = "meeting:room:";
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
+    private final Map<String, Long> userRooms = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final RedisTemplate<String, String> redisTemplate;
 
@@ -47,11 +48,13 @@ public class SignalingHandler extends TextWebSocketHandler {
 
         switch (type) {
             case "join" -> {
+                userRooms.put(fromUserId, roomId);
                 redisTemplate.opsForSet().add(ROOM_PREFIX + roomId, fromUserId);
                 broadcastToRoom(roomId, buildMsg("user-joined", roomId, fromUserId));
                 log.info("User {} joined room {}", fromUserId, roomId);
             }
             case "leave" -> {
+                userRooms.remove(fromUserId);
                 redisTemplate.opsForSet().remove(ROOM_PREFIX + roomId, fromUserId);
                 broadcastToRoom(roomId, buildMsg("user-left", roomId, fromUserId));
             }
@@ -78,6 +81,18 @@ public class SignalingHandler extends TextWebSocketHandler {
         String userId = getUserId(session);
         sessions.remove(userId);
         log.info("WebSocket disconnected: userId={}", userId);
+
+        Long roomId = userRooms.get(userId);
+        if (roomId != null) {
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                if (!sessions.containsKey(userId)) {
+                    userRooms.remove(userId);
+                    redisTemplate.opsForSet().remove(ROOM_PREFIX + roomId, userId);
+                    broadcastToRoom(roomId, buildMsg("user-left", roomId, userId));
+                    log.info("User {} disconnected for 3 seconds, automatically removed from room {}", userId, roomId);
+                }
+            }, java.util.concurrent.CompletableFuture.delayedExecutor(3, java.util.concurrent.TimeUnit.SECONDS));
+        }
     }
 
     private void broadcastToRoom(long roomId, String message) {
