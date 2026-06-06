@@ -7,21 +7,21 @@ spring:
 
   # ===== MySQL =====
   datasource:
-    url: jdbc:mysql://localhost:3306/silvertongue?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
-    username: st_user
-    password: st_pass_2026
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:silvertongue}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USER:st_user}
+    password: ${MYSQL_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   # ===== Redis =====
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
       database: 0
 
     # ===== Elasticsearch =====
     elasticsearch:
-      uris: http://localhost:9200
+      uris: http://localhost:9201
 
 # ===== MyBatis-Plus =====
 mybatis-plus:
@@ -38,9 +38,9 @@ mybatis-plus:
 
 # ===== MinIO =====
 minio:
-  endpoint: http://localhost:9000
-  access-key: silvertongue
-  secret-key: silvertongue_minio
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:silvertongue}
+  secret-key: ${MINIO_SECRET_KEY:}
   buckets:
     materials: st-materials
     recordings: st-recordings
@@ -51,18 +51,18 @@ minio:
 # ===== gRPC Agent 连接 =====
 grpc:
   agent:
-    host: localhost
-    port: 50051
+    host: ${GRPC_AGENT_HOST:localhost}
+    port: ${GRPC_AGENT_PORT:50051}
 
 # ===== JWT =====
 jwt:
-  secret: SilverTongue_JWT_Secret_Key_2026_Very_Long_And_Secure
+  secret: ${JWT_SECRET:}
   expiration: 86400000  # 24 小时 (毫秒)
 
 # ===== WeChat OAuth2 =====
 wechat:
-  app-id: wx_your_app_id        # TODO: 填写微信公众号 AppID
-  app-secret: wx_your_app_secret # TODO: 填写微信公众号 AppSecret
+  app-id: ${WECHAT_APP_ID:}
+  app-secret: ${WECHAT_APP_SECRET:}
   oauth2:
     authorize-url: https://open.weixin.qq.com/connect/oauth2/authorize
     access-token-url: https://api.weixin.qq.com/sns/oauth2/access_token

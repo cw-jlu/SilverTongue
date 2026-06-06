@@ -146,6 +146,8 @@
 | `user_id` | `BIGINT` | 用户 ID |
 | `type` | `ENUM` | 练习类型 (`shadowing` 影子跟读, `ai_chat` AI 智能对话) |
 | `mode` | `VARCHAR(20)` | 交互模式 (`full_duplex` 全双工语音, `half_duplex` 半双工, `guided` 引导式, `free_talk` 自由对话) |
+| `topic` | `VARCHAR(255)` | 会话主题/角色设定 (例如: `雅思考官`, `外企 HR 面试`) |
+| `context_file_url` | `VARCHAR(255)` | 场景辅助材料在 MinIO 中的路径 |
 | `status` | `TINYINT` | 会话状态 (`0`: 进行中/活跃, `1`: 已完成/归档) |
 | `create_time` | `DATETIME` | 会话开启时间 |
 | `update_time` | `DATETIME` | 会话状态或进度最近一次更新时间 |
@@ -192,8 +194,11 @@
 | `id` | `INT` | 主键 |
 | `model_name` | `VARCHAR(64)` | 模型唯一标识名称 (如 `qwen2.5-omni`, `deepseek-chat`) |
 | `provider` | `VARCHAR(32)` | 模型服务商名称 (如 `OpenAI`, `Ollama`, `DeepSeek`) |
+| `capability` | `VARCHAR(20)` | 模型能力类型 (`text_only`: 纯文本, `voice_input`: 接受音频输入, `voice_full`: 音频输入输出) |
 | `api_key` | `VARCHAR(256)` | API 访问密钥 (加密存储) |
 | `endpoint` | `VARCHAR(256)` | 模型接口调用地址 |
+| `priority` | `INT` | 路由优先级 (数值越小优先级越高，默认 100) |
+| `max_tokens` | `INT` | 模型最大输出 token 数 (默认 1024) |
 | `is_active` | `TINYINT` | 启用状态 (`0`: 禁用, `1`: 启用) |
 
 ---

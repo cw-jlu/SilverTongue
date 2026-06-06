@@ -10,9 +10,11 @@ import com.silvertongue.square.service.PostService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -49,6 +51,26 @@ public class PostController {
     @GetMapping("/{id}")
     public ApiResult<PostVO> detail(@PathVariable Long id) {
         return ApiResult.success(postService.detail(id));
+    }
+
+    /** 编辑帖子 */
+    @PutMapping("/{id}")
+    public ApiResult<PostVO> update(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @PathVariable Long id,
+            @Valid @RequestBody PostCreateRequest request
+    ) {
+        return ApiResult.success(postService.update(currentUser.getUserId(), id, request));
+    }
+
+    /** 删除帖子 */
+    @DeleteMapping("/{id}")
+    public ApiResult<Void> delete(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @PathVariable Long id
+    ) {
+        postService.delete(currentUser.getUserId(), id);
+        return ApiResult.success();
     }
 
     /** 点赞 */

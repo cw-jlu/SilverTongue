@@ -21,5 +21,6 @@ public class ClipVO {
     private String content;
     private String translation;
     private String vectorId;
+    private Integer status;
     private LocalDateTime createTime;
 }

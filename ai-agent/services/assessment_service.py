@@ -23,14 +23,14 @@ class AssessmentServiceServicer(assessment_pb2_grpc.AssessmentServiceServicer):
         """
         gRPC implementation for M8: Pronunciation Assessment
         """
-        logger.info(f"Received AssessPronunciation request for session: {request.session_id}")
+        logger.info(f"Received AssessPronunciation request for user: {request.user_id}")
         
-        # Call MFA aligner mock
+        # Call MFA aligner
         result = self.aligner.align_and_score(request.audio_data, request.target_text)
         
         # Build Protobuf response
-        response = assessment_pb2.AssessmentResponse(
-            score=result["final_score"],
+        response = assessment_pb2.AssessResponse(
+            final_score=result["final_score"],
             accuracy=result["accuracy"],
             fluency=result["fluency"],
             completeness=result["completeness"],
@@ -68,7 +68,6 @@ class AssessmentServiceServicer(assessment_pb2_grpc.AssessmentServiceServicer):
             pattern_obj.category = p["category"]
             pattern_obj.error_text = p["error_text"]
             pattern_obj.suggestion = p["suggestion"]
-            pattern_obj.severity = p["severity"]
             
         return response
 
