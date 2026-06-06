@@ -138,8 +138,10 @@ def _init_services():
 # Import gRPC servicers (after defining health)
 from services.agent_service import AgentServiceServicer
 from services.assessment_service import AssessmentServiceServicer
+from services.dictionary_service import DictionaryServiceServicer
 import agent_pb2_grpc
 import assessment_pb2_grpc
+import dictionary_pb2_grpc
 
 # ==========================================
 # 6. Server Startup
@@ -150,9 +152,10 @@ async def serve_grpc():
     # Register Health Check
     health_pb2_grpc.add_HealthServicer_to_server(HealthServicer(), server)
 
-    # Register AgentService and AssessmentService
+    # Register AgentService, AssessmentService, and DictionaryService
     agent_pb2_grpc.add_AgentServiceServicer_to_server(AgentServiceServicer(), server)
     assessment_pb2_grpc.add_AssessmentServiceServicer_to_server(AssessmentServiceServicer(), server)
+    dictionary_pb2_grpc.add_DictionaryServiceServicer_to_server(DictionaryServiceServicer(), server)
 
     listen_addr = '[::]:50051'
     server.add_insecure_port(listen_addr)

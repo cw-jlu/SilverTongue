@@ -132,36 +132,51 @@ public class ClipService {
     }
 
     /**
-     * 异步触发下载（当前使用 yt-dlp 命令行，后续可切 gRPC）
+     * 异步触发下载（使用 yt-dlp/ffmpeg 命令行，后续可切 gRPC）
+     *
+     * TODO: 新建 harvester.proto + HarvesterGrpcClient，通过 gRPC
+     *       调用 Python Agent 的 harvester 服务，避免 Runtime.exec()。
+     *       当前方案使用 ProcessBuilder 以保证跨平台兼容性。
      */
     private void triggerAsyncDownload(Long clipId, String url, Double startTime, Double endTime) {
         new Thread(() -> {
+            Clip clip = null;
             try {
-                // 更新状态为下载中
-                Clip clip = clipMapper.selectById(clipId);
-                clip.setStatus(1);
+                clip = clipMapper.selectById(clipId);
+                clip.setStatus(1); // 下载中
                 clipMapper.updateById(clip);
 
-                // 调用 Python Agent 的 harvester 服务
-                // TODO: 替换为 gRPC 调用
-                String pythonCmd = String.format(
-                        "python ai-agent/services/harvester.py --clip-id %d --url \"%s\" --start %.2f --end %.2f",
-                        clipId, url, startTime, endTime
+                // 构建命令行：python harvester.py --clip-id <id> --url <url> --start <t> --end <t>
+                ProcessBuilder pb = new ProcessBuilder(
+                        "python",
+                        "ai-agent/services/harvester.py",
+                        "--clip-id", String.valueOf(clipId),
+                        "--url", url,
+                        "--start", String.format("%.2f", startTime),
+                        "--end", String.format("%.2f", endTime)
                 );
-                Process process = Runtime.getRuntime().exec(pythonCmd);
+                pb.redirectErrorStream(true);
+                Process process = pb.start();
+
+                // 读取输出以便调试
+                String output = new String(process.getInputStream().readAllBytes());
                 int exitCode = process.waitFor();
 
                 if (exitCode == 0) {
                     clip.setStatus(3); // 已完成
+                    log.info("Harvest download completed: clipId={}", clipId);
                 } else {
                     clip.setStatus(4); // 失败
+                    log.error("Harvest download failed: clipId={}, exitCode={}, output={}",
+                            clipId, exitCode, output.substring(0, Math.min(500, output.length())));
                 }
                 clipMapper.updateById(clip);
             } catch (Exception e) {
                 log.error("Async download failed: clipId={}", clipId, e);
-                Clip clip = clipMapper.selectById(clipId);
-                clip.setStatus(4);
-                clipMapper.updateById(clip);
+                if (clip != null) {
+                    clip.setStatus(4);
+                    clipMapper.updateById(clip);
+                }
             }
         }, "harvest-clip-" + clipId).start();
     }

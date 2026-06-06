@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package silvertongue.dictionary;
+
+option java_multiple_files = true;
+option java_package = "com.silvertongue.grpc.dictionary";
+option java_outer_classname = "DictionaryProto";
+
+// 词典查询服务 — 剑桥词典 (Cambridge Dictionary) SQLite 查词
+service DictionaryService {
+  rpc LookupWord(LookupRequest) returns (LookupResponse);
+}
+
+message LookupRequest {
+  string word = 1;
+}
+
+message LookupResponse {
+  bool found = 1;
+  string word = 2;                 // 查询词
+  repeated DictEntry entries = 3;  // 词典条目
+}
+
+message DictEntry {
+  string pos = 1;              // 词性 (noun, verb, adj, etc.)
+  string definition = 2;       // 英文释义
+  string translation = 3;      // 中文翻译
+  repeated string examples = 4; // 例句
+  string phonetics_uk = 5;      // 英式音标
+  string phonetics_us = 6;      // 美式音标
+  string audio_uk_url = 7;      // 英式发音 URL
+  string audio_us_url = 8;      // 美式发音 URL
+}
