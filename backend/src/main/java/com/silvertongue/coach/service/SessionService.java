@@ -33,19 +33,20 @@ public class SessionService {
         
         String topic = request.getTopic() != null && !request.getTopic().isBlank() ? request.getTopic() : "日常闲聊";
         session.setTopic(topic);
+        session.setContextFileUrl(request.getContextFileUrl());
         
         session.setStatus(0); // 进行中
         session.setCreateTime(now);
         session.setUpdateTime(now);
         sessionMapper.insert(session);
 
-        log.info("Session created: id={}, userId={}, type={}, mode={}, topic={}", 
-                 session.getId(), userId, request.getType(), request.getMode(), topic);
+        log.info("Session created: id={}, userId={}, type={}, mode={}, topic={}, contextFileUrl={}", 
+                 session.getId(), userId, request.getType(), request.getMode(), topic, request.getContextFileUrl());
 
         // 调用 Python Agent 开启会话 (初始化 Redis 中的角色/场景等上下文)
         if ("ai_chat".equals(request.getType())) {
             // 目前默认传入 B2 级别，可后续扩展用户级别字段
-            agentGrpcClient.startSession(userId.toString(), session.getId().toString(), request.getMode(), "B2", topic);
+            agentGrpcClient.startSession(userId.toString(), session.getId().toString(), request.getMode(), "B2", topic, request.getContextFileUrl());
         }
 
         return toVO(session);
@@ -83,6 +84,7 @@ public class SessionService {
                 .type(s.getType())
                 .mode(s.getMode())
                 .topic(s.getTopic())
+                .contextFileUrl(s.getContextFileUrl())
                 .status(s.getStatus())
                 .createTime(s.getCreateTime())
                 .updateTime(s.getUpdateTime())

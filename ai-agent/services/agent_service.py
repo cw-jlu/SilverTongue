@@ -13,6 +13,9 @@ import json
 import time
 import uuid
 import redis
+import fitz
+import docx
+from minio import Minio
 
 # Add proto to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'proto'))
@@ -58,11 +61,49 @@ class AgentServiceServicer(agent_pb2_grpc.AgentServiceServicer):
         r = _get_redis()
         if r:
             try:
+                context_text = ""
+                # Parse context file if provided
+                if getattr(request, "context_file_url", None):
+                    try:
+                        logger.info(f"Extracting context from {request.context_file_url}")
+                        minio_client = Minio(
+                            os.getenv("MINIO_ENDPOINT", "localhost:9000"),
+                            access_key=os.getenv("MINIO_ACCESS_KEY", "minioadmin"),
+                            secret_key=os.getenv("MINIO_SECRET_KEY", "minioadmin"),
+                            secure=False
+                        )
+                        bucket = os.getenv("MINIO_RECORDINGS_BUCKET", "st-recordings")
+                        
+                        response = minio_client.get_object(bucket, request.context_file_url)
+                        file_data = response.read()
+                        response.close()
+                        response.release_conn()
+                        
+                        ext = request.context_file_url.split('.')[-1].lower() if '.' in request.context_file_url else ""
+                        if ext == "pdf":
+                            doc = fitz.open(stream=file_data, filetype="pdf")
+                            context_text = "\n".join(page.get_text() for page in doc)
+                            doc.close()
+                        elif ext in ["docx", "doc"]:
+                            from io import BytesIO
+                            doc = docx.Document(BytesIO(file_data))
+                            context_text = "\n".join(para.text for para in doc.paragraphs)
+                        else:
+                            context_text = file_data.decode("utf-8", errors="ignore")
+                            
+                        if len(context_text) > 10000:
+                            logger.warning(f"Truncating context text from {len(context_text)} to 10000 chars")
+                            context_text = context_text[:10000]
+                            
+                    except Exception as e:
+                        logger.error(f"Failed to extract context file: {e}")
+
                 session_data = {
                     "user_id": request.user_id,
                     "user_level": request.user_level,
                     "topic": request.topic,
                     "mode": request.mode,
+                    "context_text": context_text,
                     "created_at": time.time()
                 }
                 r.set(f"session:{request.session_id}", json.dumps(session_data), ex=86400)
@@ -106,6 +147,7 @@ class AgentServiceServicer(agent_pb2_grpc.AgentServiceServicer):
                         user_id = data.get("user_id", "unknown")
                         user_level = data.get("user_level", "intermediate")
                         topic = data.get("topic", "free talk")
+                        context_text = data.get("context_text", None)
                 except Exception as e:
                     logger.error(f"Error loading session metadata: {e}")
 
@@ -120,6 +162,7 @@ class AgentServiceServicer(agent_pb2_grpc.AgentServiceServicer):
                 "user_id": user_id,
                 "user_level": user_level,
                 "topic": topic,
+                "context_text": context_text if 'context_text' in locals() else None,
                 "mode": "full_duplex",
                 "current_audio_buffer": bytes(audio_buffer),
                 "is_user_speaking": False,

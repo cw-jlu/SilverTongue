@@ -13,4 +13,5 @@ public class SessionCreateRequest {
     private String mode;   // full_duplex, half_duplex, guided, free_talk
 
     private String topic;  // 角色/场景 (可选)
+    private String contextFileUrl;
 }

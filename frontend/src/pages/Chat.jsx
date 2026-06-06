@@ -11,17 +11,39 @@ export default function Chat() {
   // 新增角色/场景相关状态
   const [roleType, setRoleType] = useState('日常闲聊');
   const [customRole, setCustomRole] = useState('');
+  
+  // 新增背景材料上传
+  const [contextFile, setContextFile] = useState(null);
+  const [uploadingContext, setUploadingContext] = useState(false);
 
-  const PRESET_ROLES = ['日常闲聊', '雅思考官', '外企 HR 面试', '旅游向导', '餐厅点餐', '自定义'];
+  const PRESET_ROLES = ['日常闲聊', '雅思考官', '外企 HR 面试', '商务会议', '旅游向导', '餐厅点餐', '自定义'];
 
   const createSession = async () => {
-    const finalTopic = roleType === '自定义' ? customRole : roleType;
-    const r = await api.post('/session/create', { 
-      type: 'ai_chat', 
-      mode: 'free_talk',
-      topic: finalTopic
-    });
-    setSession(r.data);
+    try {
+      setUploadingContext(true);
+      const finalTopic = roleType === '自定义' ? customRole : roleType;
+      
+      let contextFileUrl = null;
+      if (contextFile) {
+        const fd = new FormData();
+        fd.append('file', contextFile);
+        const uploadRes = await api.post('/session/upload_context', fd);
+        contextFileUrl = uploadRes.data;
+      }
+
+      const r = await api.post('/session/create', { 
+        type: 'ai_chat', 
+        mode: 'free_talk',
+        topic: finalTopic,
+        contextFileUrl: contextFileUrl
+      });
+      setSession(r.data);
+    } catch (e) {
+      console.error("Failed to create session:", e);
+      alert("创建会话失败，请重试");
+    } finally {
+      setUploadingContext(false);
+    }
   };
 
   const submitAudio = async () => {
@@ -60,8 +82,21 @@ export default function Chat() {
               style={{ width: '100%', maxWidth: '400px', marginBottom: '16px', padding: '8px' }}
             />
           )}
+
+          <div style={{ marginBottom: '16px' }}>
+            <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#666' }}>
+              附件资料（选填，如简历、菜单等，支持 .pdf, .docx, .txt）：
+            </p>
+            <input 
+              type="file" 
+              accept=".pdf,.docx,.doc,.txt" 
+              onChange={e => setContextFile(e.target.files[0])} 
+            />
+          </div>
           
-          <button className="btn" onClick={createSession}>开始新对话</button>
+          <button className="btn" onClick={createSession} disabled={uploadingContext}>
+            {uploadingContext ? '初始化中...' : '开始新对话'}
+          </button>
         </div>
       ) : (
         <div className="card">
