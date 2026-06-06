@@ -2,13 +2,14 @@
 (function () {
   'use strict';
 
-  const BACKEND_URL = 'http://localhost:8080/api/harvester';
+  const BACKEND_URL = 'http://localhost:8080/api';
 
   // ─── 1. 页面检测 ───────────────────────────────
   function detectPlatform() {
     const host = window.location.hostname;
     if (host.includes('youtube.com') || host === 'youtu.be') return 'youtube';
     if (host.includes('netflix.com')) return 'netflix';
+    if (host.includes('coursera.org')) return 'coursera';
     return null;
   }
 
@@ -148,7 +149,7 @@
 
     const token = await getToken();
     try {
-      const resp = await fetch(`${BACKEND_URL}/clip/create`, {
+      const resp = await fetch(`${BACKEND_URL}/clips/harvest`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -162,11 +163,12 @@
         }),
       });
 
-      const data = await resp.json();
-      if (data.code === 200) {
+      // 后端返回: { id, materialId, startTime, endTime, status }
+      const clip = await resp.json();
+      if (clip && clip.id) {
         setStatus('✅ 采集成功！等待后台下载切割...', 'success');
         // 轮询状态
-        pollStatus(data.data.id);
+        pollStatus(clip.id);
       } else {
         setStatus(`❌ ${data.message || '请求失败'}`, 'error');
       }
@@ -181,22 +183,23 @@
     const interval = setInterval(async () => {
       attempts++;
       try {
-        const resp = await fetch(`${BACKEND_URL}/clip/status/${clipId}`);
-        const data = await resp.json();
-        if (data.code === 200) {
-          const status = data.data.status;
-          if (status === 'completed') {
-            setStatus('✅ 采集完成！已存入语料库', 'success');
-            clearInterval(interval);
-          } else if (status === 'failed') {
-            setStatus('❌ 采集失败', 'error');
-            clearInterval(interval);
-          } else {
-            setStatus(`⏳ ${status === 'downloading' ? '下载中' : '处理中'}...`, 'info');
-          }
+        const resp = await fetch(`${BACKEND_URL}/clips/status/${clipId}`);
+        const clip = await resp.json();
+        // 后端返回 ClipVO: { id, materialId, status (0待处理/1下载中/3完成/4失败), ... }
+        const status = clip.status;
+        if (status === 3) {
+          setStatus('✅ 采集完成！已存入语料库', 'success');
+          clearInterval(interval);
+        } else if (status === 4) {
+          setStatus('❌ 采集失败', 'error');
+          clearInterval(interval);
+        } else if (status === 1) {
+          setStatus('⏳ 下载切割中...', 'info');
+        } else {
+          setStatus('⏳ 等待处理...', 'info');
         }
       } catch (err) {
-        // ignore
+        // ignore transient errors
       }
       if (attempts >= maxAttempts) {
         setStatus('⏱️ 超时，请稍后查看', 'error');
