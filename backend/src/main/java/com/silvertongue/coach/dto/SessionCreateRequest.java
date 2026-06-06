@@ -14,4 +14,5 @@ public class SessionCreateRequest {
 
     private String topic;  // 角色/场景 (可选)
     private String contextFileUrl;
+    private String userLevel; // CEFR 等级 (如 A2, B1, B2, C1)
 }

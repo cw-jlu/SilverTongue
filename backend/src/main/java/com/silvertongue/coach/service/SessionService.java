@@ -49,8 +49,8 @@ public class SessionService {
 
         // 调用 Python Agent 开启会话 (初始化 Redis 中的角色/场景等上下文)
         if ("ai_chat".equals(request.getType())) {
-            // 目前默认传入 B2 级别，可后续扩展用户级别字段
-            agentGrpcClient.startSession(userId.toString(), session.getId().toString(), request.getMode(), "B2", topic, request.getContextFileUrl());
+            String userLevel = request.getUserLevel() != null && !request.getUserLevel().isBlank() ? request.getUserLevel() : "B2";
+            agentGrpcClient.startSession(userId.toString(), session.getId().toString(), request.getMode(), userLevel, topic, request.getContextFileUrl());
         }
 
         return toVO(session);
