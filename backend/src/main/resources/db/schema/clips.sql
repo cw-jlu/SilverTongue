@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS clips (
     content TEXT NULL COMMENT '英文字幕原文',
     translation TEXT NULL COMMENT '中文字幕翻译',
     vector_id VARCHAR(64) NULL COMMENT '对应的 Milvus 向量主键 ID',
+    status TINYINT NOT NULL DEFAULT 0 COMMENT '0:待处理 1:下载中 2:切割中 3:已完成 4:失败',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '切片创建时间',
     PRIMARY KEY (id),
     KEY idx_clips_material (material_id)
