@@ -16,7 +16,7 @@ import com.silvertongue.user.entity.User;
 import com.silvertongue.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.elasticsearch.core.ElasticsearchRestTemplate;
+import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.SearchHit;
 import org.springframework.data.elasticsearch.core.query.Criteria;
 import org.springframework.data.elasticsearch.core.query.CriteriaQuery;
@@ -37,7 +37,7 @@ public class PostService {
     private final PostMapper postMapper;
     private final CommentMapper commentMapper;
     private final UserMapper userMapper;
-    private final ElasticsearchRestTemplate esTemplate;
+    private final ElasticsearchOperations esTemplate;
 
     /**
      * 发帖 + 同步 ES 索引
