@@ -192,8 +192,11 @@
 | `id` | `INT` | 主键 |
 | `model_name` | `VARCHAR(64)` | 模型唯一标识名称 (如 `qwen2.5-omni`, `deepseek-chat`) |
 | `provider` | `VARCHAR(32)` | 模型服务商名称 (如 `OpenAI`, `Ollama`, `DeepSeek`) |
+| `capability` | `VARCHAR(20)` | 模型能力类型 (`text_only`: 纯文本, `voice_input`: 接受音频输入, `voice_full`: 音频输入输出) |
 | `api_key` | `VARCHAR(256)` | API 访问密钥 (加密存储) |
 | `endpoint` | `VARCHAR(256)` | 模型接口调用地址 |
+| `priority` | `INT` | 路由优先级 (数值越小优先级越高，默认 100) |
+| `max_tokens` | `INT` | 模型最大输出 token 数 (默认 1024) |
 | `is_active` | `TINYINT` | 启用状态 (`0`: 禁用, `1`: 启用) |
 
 ---
