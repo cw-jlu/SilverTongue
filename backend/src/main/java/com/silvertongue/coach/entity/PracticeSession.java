@@ -33,4 +33,7 @@ public class PracticeSession {
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;
+    
+    /** 课后总结报告 (JSON string) */
+    private String reportData;
 }

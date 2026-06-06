@@ -70,6 +70,12 @@ public class SessionService {
 
         session.setStatus(1);
         session.setUpdateTime(LocalDateTime.now());
+        
+        // Retrieve session data from AgentGrpcClient or Elasticsearch to generate report
+        // For demonstration, we construct a dummy report summarizing the Chinglish corrections
+        String mockReport = "{\"grammar_errors\": 2, \"chinglish_patterns\": [{\"error\": \"I very like\", \"suggestion\": \"I really like\"}], \"overall_fluency\": 85}";
+        session.setReportData(mockReport);
+        
         sessionMapper.updateById(session);
 
         log.info("Session completed: id={}", sessionId);
