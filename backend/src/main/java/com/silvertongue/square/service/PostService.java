@@ -1,6 +1,7 @@
 package com.silvertongue.square.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.silvertongue.square.document.PostDocument;
@@ -95,6 +96,54 @@ public class PostService {
         vo.setComments(comments.stream().map(this::toCommentVO).collect(Collectors.toList()));
 
         return vo;
+    }
+
+    /**
+     * 编辑帖子（仅作者可编辑）+ 同步 ES
+     */
+    @Transactional
+    public PostVO update(Long userId, Long postId, PostCreateRequest request) {
+        Post post = postMapper.selectById(postId);
+        if (post == null) {
+            throw new IllegalArgumentException("post not found");
+        }
+        if (!post.getUserId().equals(userId)) {
+            throw new IllegalArgumentException("only the author can edit this post");
+        }
+        post.setContent(request.getContent());
+        post.setClipId(request.getClipId());
+        postMapper.updateById(post);
+
+        // 同步 ES
+        User user = userMapper.selectById(userId);
+        PostDocument doc = PostDocument.builder()
+                .postId(post.getId())
+                .content(post.getContent())
+                .nickname(user != null ? user.getNickname() : "unknown")
+                .build();
+        esTemplate.save(doc);
+
+        return toVO(post, userId);
+    }
+
+    /**
+     * 删除帖子（仅作者可删除）+ 级联删除评论 + 移除 ES 文档
+     */
+    @Transactional
+    public void delete(Long userId, Long postId) {
+        Post post = postMapper.selectById(postId);
+        if (post == null) {
+            throw new IllegalArgumentException("post not found");
+        }
+        if (!post.getUserId().equals(userId)) {
+            throw new IllegalArgumentException("only the author can delete this post");
+        }
+        // 级联删除评论
+        commentMapper.delete(new LambdaUpdateWrapper<Comment>()
+                .eq(Comment::getPostId, postId));
+        postMapper.deleteById(postId);
+        // 移除 ES 文档
+        esTemplate.delete(String.valueOf(postId), PostDocument.class);
     }
 
     /**
