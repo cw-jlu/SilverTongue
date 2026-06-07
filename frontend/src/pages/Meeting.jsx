@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 
 export default function Meeting() {
@@ -6,6 +7,7 @@ export default function Meeting() {
   const [roomName, setRoomName] = useState('');
   const [maxUsers, setMaxUsers] = useState(10);
   const [userId, setUserId] = useState(null);
+  const navigate = useNavigate();
 
   const loadRooms = () => api.get('/room').then((response) => setRooms(response.data || []));
 
@@ -25,21 +27,20 @@ export default function Meeting() {
 
   const createRoom = async () => {
     if (!roomName.trim()) return;
-    await api.post('/room', { roomName, maxUsers });
-    setRoomName('');
-    loadRooms();
+    try {
+      const res = await api.post('/room', { roomName, maxUsers });
+      if (res?.data?.id) {
+        navigate(`/meeting/${res.data.id}`);
+      }
+    } catch (error) {
+      alert(error?.message || '创建失败');
+    }
   };
 
   const joinRoom = async (roomId) => {
     try {
       await api.post(`/room/${roomId}/join`);
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUserId = encodeURIComponent(userId || 'guest');
-      const wsUrl = `${wsProtocol}//${window.location.host}/ws/signaling?userId=${wsUserId}`;
-      const ws = new WebSocket(wsUrl);
-      ws.onopen = () => ws.send(JSON.stringify({ type: 'join', roomId }));
-      ws.onmessage = (event) => console.log('Signal:', JSON.parse(event.data));
-      alert('已加入房间，WebSocket 信令已连接，请查看 Console。');
+      navigate(`/meeting/${roomId}`);
     } catch (error) {
       alert(error?.message || '加入失败');
     }

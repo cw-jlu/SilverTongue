@@ -8,12 +8,13 @@ STT/TTS services, Kafka audio pipeline, and ES store.
 import asyncio
 import os
 import grpc
-from fastapi import FastAPI, status
+from fastapi import FastAPI, Body, Response, status
 from prometheus_client import make_asgi_app
 import uvicorn
 from loguru import logger
 import redis.asyncio as redis
 from grpc_health.v1 import health_pb2, health_pb2_grpc
+import base64
 from pydantic import BaseModel, ConfigDict, Field
 
 app = FastAPI(title="SilverTongue AI Agent")
@@ -27,7 +28,6 @@ class HarvesterJobRequest(BaseModel):
     url: str
     start_time: float = Field(alias="startTime")
     end_time: float = Field(alias="endTime")
-
 
 # ==========================================
 # 1. Prometheus Metrics Configuration
@@ -73,6 +73,57 @@ async def refresh_providers():
         _model_router.refresh()
     return {"status": "refreshed"}
 
+@app.get("/api/ai/roles")
+async def get_preset_roles():
+    from agent.nodes import PRESET_ROLES
+    roles_desc = {
+        "日常闲聊": "友善、轻松的聊天伴侣，适合练习日常英语对话",
+        "雅思考官": "模拟雅思口语考试，包含Part 1, 2, 3的专业测评",
+        "外企 HR 面试": "模拟外企求职面试，提供专业的行为与技术问题提问",
+        "商务会议": "模拟商务会议场景，讨论项目进度、战略规划等",
+        "旅游向导": "热情好客的当地导游，带你领略名胜古迹并推荐地道美食",
+        "餐厅点餐": "高档餐厅的服务员，为你提供点餐、配酒等沉浸式体验"
+    }
+    return [
+        {
+            "id": idx + 1,
+            "name": k,
+            "description": roles_desc.get(k, "自定义AI角色"),
+            "setting": v,
+            "type": "preset"
+        }
+        for idx, (k, v) in enumerate(PRESET_ROLES.items())
+    ]
+
+@app.post("/api/ai/tts/speak")
+async def tts_speak(payload: dict = Body(...)):
+    text = payload.get("text", "")
+    voice = payload.get("voice", "")
+    voice_map = {
+        "female_us": "en-US-AriaNeural",
+        "male_us": "en-US-GuyNeural",
+        "female_uk": "en-GB-SoniaNeural",
+        "male_uk": "en-GB-RyanNeural"
+    }
+    actual_voice = voice_map.get(voice, voice)
+    audio_bytes = b""
+    if _tts_service:
+        audio_bytes = _tts_service.synthesize(text, voice=actual_voice)
+    return Response(content=audio_bytes, media_type="audio/mpeg")
+
+@app.post("/api/ai/stt/transcribe")
+async def stt_transcribe(payload: dict = Body(...)):
+    audio_base64 = payload.get("audioBase64", "")
+    try:
+        audio_bytes = base64.b64decode(audio_base64)
+    except Exception as e:
+        logger.error(f"Failed to decode base64: {e}")
+        return {"text": ""}
+    text = ""
+    if _stt_service:
+        text = _stt_service.transcribe(audio_bytes)
+    return {"text": text}
+
 
 async def _run_harvester_job(job: HarvesterJobRequest):
     from services.harvester import process_clip
@@ -110,6 +161,7 @@ async def create_harvester_job(payload: HarvesterJobRequest):
         "status": "accepted",
         "clipId": payload.clip_id,
     }
+
 
 # ==========================================
 # 4. gRPC Health Check Servicer

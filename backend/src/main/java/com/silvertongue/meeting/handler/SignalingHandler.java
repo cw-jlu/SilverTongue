@@ -11,7 +11,14 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 import com.silvertongue.meeting.service.MeetingService;
 
+import com.silvertongue.meeting.mapper.RoomParticipantMapper;
+import com.silvertongue.meeting.entity.RoomParticipant;
+import com.silvertongue.user.mapper.UserMapper;
+import com.silvertongue.coach.grpc.AgentGrpcClient;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+
 import java.util.Map;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -29,16 +36,28 @@ public class SignalingHandler extends TextWebSocketHandler {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final RedisTemplate<String, String> redisTemplate;
     private final MeetingService meetingService;
+    private final RoomParticipantMapper participantMapper;
+    private final UserMapper userMapper;
+    private final AgentGrpcClient agentGrpcClient;
 
-    public SignalingHandler(RedisTemplate<String, String> redisTemplate, MeetingService meetingService) {
+    public SignalingHandler(RedisTemplate<String, String> redisTemplate, 
+                            MeetingService meetingService,
+                            RoomParticipantMapper participantMapper,
+                            UserMapper userMapper,
+                            AgentGrpcClient agentGrpcClient) {
         this.redisTemplate = redisTemplate;
         this.meetingService = meetingService;
+        this.participantMapper = participantMapper;
+        this.userMapper = userMapper;
+        this.agentGrpcClient = agentGrpcClient;
     }
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         String userId = getUserId(session);
-        sessions.put(userId, session);
+        // Decorate session to handle highly concurrent Meeting Room events safely
+        WebSocketSession concurrentSession = new org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator(session, 5000, 65536);
+        sessions.put(userId, concurrentSession);
         log.info("WebSocket connected: userId={}", userId);
     }
 
@@ -60,6 +79,67 @@ public class SignalingHandler extends TextWebSocketHandler {
                 userRooms.remove(fromUserId);
                 redisTemplate.opsForSet().remove(ROOM_PREFIX + roomId, fromUserId);
                 broadcastToRoom(roomId, buildMsg("user-left", roomId, fromUserId));
+            }
+            case "chat" -> {
+                String content = msg.has("content") ? msg.get("content").asText() : "";
+                if (content != null && !content.isBlank()) {
+                    String nickname = getNickname(fromUserId);
+                    String chatMsg = objectMapper.createObjectNode()
+                            .put("type", "chat")
+                            .put("roomId", roomId)
+                            .put("from", fromUserId)
+                            .put("senderName", nickname)
+                            .put("content", content)
+                            .toString();
+                    broadcastToRoom(roomId, chatMsg);
+
+                    // Asynchronously handle AI participant responses
+                    java.util.concurrent.CompletableFuture.runAsync(() -> {
+                        try {
+                            List<RoomParticipant> aiParticipants = participantMapper.selectList(
+                                    new LambdaQueryWrapper<RoomParticipant>()
+                                            .eq(RoomParticipant::getRoomId, roomId)
+                                            .lt(RoomParticipant::getUserId, 0)
+                                            .isNull(RoomParticipant::getLeaveTime)
+                            );
+                            for (RoomParticipant ai : aiParticipants) {
+                                String aiSessionKey = "room-session-" + roomId + "-" + ai.getUserId();
+                                String aiSetting = ai.getAiRoleSetting() != null ? ai.getAiRoleSetting() : "You are a helpful assistant.";
+                                String aiName = ai.getAiRoleName() != null ? ai.getAiRoleName() : "AI Assistant";
+
+                                // 1. Start Session
+                                agentGrpcClient.startSession(
+                                        String.valueOf(ai.getUserId()),
+                                        aiSessionKey,
+                                        "free_talk",
+                                        "B2",
+                                        aiSetting,
+                                        null
+                                );
+
+                                // 2. Chat Stream to get the response
+                                AgentGrpcClient.ChatStreamResult result = agentGrpcClient.chatStream(
+                                        aiSessionKey,
+                                        content.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+                                );
+
+                                String replyText = result.getReplyText();
+                                if (replyText != null && !replyText.isBlank()) {
+                                    String aiReplyMsg = objectMapper.createObjectNode()
+                                            .put("type", "chat")
+                                            .put("roomId", roomId)
+                                            .put("from", ai.getUserId())
+                                            .put("senderName", aiName)
+                                            .put("content", replyText)
+                                            .toString();
+                                    broadcastToRoom(roomId, aiReplyMsg);
+                                }
+                            }
+                        } catch (Exception e) {
+                            log.error("Error generating AI participant response for room {}", roomId, e);
+                        }
+                    });
+                }
             }
             case "offer", "answer", "candidate" -> {
                 String target = msg.has("target") ? msg.get("target").asText() : null;
@@ -138,5 +218,22 @@ public class SignalingHandler extends TextWebSocketHandler {
             }
         }
         return session.getId();
+    }
+
+    private String getNickname(String userId) {
+        try {
+            long uid = Long.parseLong(userId);
+            if (uid < 0) {
+                // If it is an AI, find its name from the database (it might be configured)
+                // However, the caller usually has the AI's configured name when invoking.
+                // We'll fallback to "AI Assistant"
+                return "AI Assistant";
+            }
+            com.silvertongue.user.entity.User user = userMapper.selectById(uid);
+            if (user != null) {
+                return user.getNickname() != null ? user.getNickname() : user.getUsername();
+            }
+        } catch (Exception ignored) {}
+        return "用户 " + userId;
     }
 }
