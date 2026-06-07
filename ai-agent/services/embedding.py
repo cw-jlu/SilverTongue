@@ -11,17 +11,21 @@ DIMENSION = 1536  # Default for OpenAI ada-002 or Qwen embeddings
 
 class VectorDBClient:
     def __init__(self):
-        self._connect()
+        self.connected = self._connect()
         self.collection = self._init_collection()
         
     def _connect(self):
         try:
             connections.connect(host=MILVUS_HOST, port=MILVUS_PORT)
             logger.info(f"Connected to Milvus at {MILVUS_HOST}:{MILVUS_PORT}")
+            return True
         except Exception as e:
-            logger.error(f"Failed to connect to Milvus: {e}")
+            logger.warning(f"Milvus unavailable at {MILVUS_HOST}:{MILVUS_PORT}, vector search disabled: {e}")
+            return False
             
     def _init_collection(self) -> Collection:
+        if not self.connected:
+            return None
         try:
             if utility.has_collection(COLLECTION_NAME):
                 logger.info(f"Collection {COLLECTION_NAME} already exists.")
@@ -48,7 +52,7 @@ class VectorDBClient:
             logger.info(f"Created collection {COLLECTION_NAME} and index.")
             return collection
         except Exception as e:
-             logger.error(f"Failed to init collection: {e}")
+             logger.warning(f"Milvus collection init skipped, vector search disabled: {e}")
              return None
         
     def mock_embed(self, text: str) -> List[float]:

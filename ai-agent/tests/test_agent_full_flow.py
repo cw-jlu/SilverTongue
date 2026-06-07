@@ -1,80 +1,90 @@
 import os
 import sys
-import fitz
+import types
 
-# Ensure the parent directory is in the path so we can import agent modules
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-# Set up environment variables to ensure ModelRouter uses DeepSeek
-os.environ["DEEPSEEK_API_KEY"] = "sk-46a31dc5807046e0bdef7d369365d724"
-os.environ["DEEPSEEK_MODEL"] = "deepseek-chat"
+embedding_module = types.ModuleType("services.embedding")
+
+
+class DummyVectorDBClient:
+    def __init__(self):
+        self.collection = None
+
+    def search(self, user_id, query_text, top_k=3):
+        return []
+
+
+embedding_module.VectorDBClient = DummyVectorDBClient
+sys.modules["services.embedding"] = embedding_module
 
 from agent.graph import create_agent_graph
-from agent.nodes import configure_nodes
-from services.model_router import ModelRouter
+import agent.nodes as nodes
+from services.providers.base import ModelCapability, ModelResponse
 
-def test_full_agent_flow_with_context():
-    print("1. Parsing Context Document (1.pdf)...")
-    test_pdf = os.path.join(os.path.dirname(__file__), '1.pdf')
-    
-    with open(test_pdf, 'rb') as f:
-        file_data = f.read()
-        
-    doc = fitz.open(stream=file_data, filetype="pdf")
-    context_text = "\n".join(page.get_text() for page in doc)
-    doc.close()
-    
-    # Truncate just like in agent_service.py
-    if len(context_text) > 10000:
-        context_text = context_text[:10000]
-    print(f"   ✅ Parsed {len(context_text)} characters.")
 
-    print("\n2. Initializing Model Router...")
-    router = ModelRouter()
-    
-    # Configure nodes with the router, but mock STT, TTS, and ConversationStore as None
-    configure_nodes(router, None, None, None)
+class FakeProvider:
+    name = "fake-text"
+    capability = ModelCapability.TEXT_ONLY
+    supports_voice = False
 
-    print("\n3. Creating LangGraph application...")
+    def chat(self, messages, audio_data=None, **kwargs):
+        return ModelResponse(text="Mock interview reply.")
+
+
+class FakeRouter:
+    def __init__(self):
+        self.provider = FakeProvider()
+
+    def select(self, prefer_voice=False):
+        return self.provider
+
+
+class FakeTtsService:
+    def synthesize(self, text, voice=None):
+        return b"mock-audio"
+
+
+class FakeConversationStore:
+    def __init__(self):
+        self.records = []
+
+    def persist_message(self, **kwargs):
+        self.records.append(kwargs)
+
+
+def test_full_agent_flow_runs_without_external_services():
+    nodes.vector_db.collection = None
+    store = FakeConversationStore()
+    nodes.configure_nodes(FakeRouter(), None, FakeTtsService(), store)
+
     app = create_agent_graph()
+    result_state = app.invoke(
+        {
+            "session_id": "test-session-123",
+            "user_id": "user-tester",
+            "mode": "free_talk",
+            "user_level": "B2",
+            "topic": "外企 HR 面试",
+            "context_text": "Candidate has 5 years of backend experience.",
+            "messages": [],
+            "current_audio_buffer": b"Hello, I am here for the interview.",
+            "is_user_speaking": False,
+            "turn_taken": True,
+            "active_skills": [],
+            "chinglish_analysis": {},
+            "refined_text": None,
+            "user_transcript": "",
+            "response_audio": b"",
+            "selected_provider": "",
+            "model_capability": "",
+            "next_node": "",
+        }
+    )
 
-    # The user says "Hello, I am here for the software engineering interview."
-    user_input = "Hello, I am here for the software engineering interview. Let's begin."
-    
-    print(f"\n4. Preparing Agent State with Context...")
-    print(f"   [User says]: {user_input}")
-    
-    initial_state = {
-        "session_id": "test_session_123",
-        "user_id": "user_tester",
-        "mode": "free_talk",
-        "user_level": "intermediate",
-        "topic": "外企 HR 面试",
-        "context_text": context_text,
-        "messages": [{"role": "user", "content": user_input}],
-        "current_audio_buffer": b"", # No audio, skip STT
-        "is_user_speaking": False,
-        "turn_taken": True,
-        "chinglish_analysis": {},
-        "refined_text": None,
-        "user_transcript": user_input,
-        "response_audio": b"",
-    }
-
-    print("\n5. Invoking Agent Graph...")
-    result_state = app.invoke(initial_state)
-
-    print("\n" + "="*50)
-    print("✅ TEST COMPLETE")
-    print("="*50)
-    
-    messages = result_state.get("messages", [])
-    if len(messages) >= 2:
-        ai_reply = messages[-1].get("content", "")
-        print(f"AI Assistant Reply (HR Interviewer Role):\n")
-        print(ai_reply)
-    else:
-        print("Error: No AI reply generated.")
-
-if __name__ == "__main__":
-    test_full_agent_flow_with_context()
+    assert result_state["user_transcript"] == "Hello, I am here for the interview."
+    assert result_state["messages"][-1]["content"] == "Mock interview reply."
+    assert result_state["selected_provider"] == "fake-text"
+    assert result_state["model_capability"] == "text_only"
+    assert result_state["response_audio"] == b"mock-audio"
+    assert len(store.records) == 2
