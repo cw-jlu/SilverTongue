@@ -35,6 +35,9 @@ class AgentState(TypedDict):
     is_user_speaking: bool
     turn_taken: bool
     
+    # Active skills (pluggable capability modules)
+    active_skills: List[str]
+    
     # Analysis results
     chinglish_analysis: Dict[str, Any]
     refined_text: Optional[str]

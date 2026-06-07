@@ -104,6 +104,7 @@ class AgentServiceServicer(agent_pb2_grpc.AgentServiceServicer):
                     "topic": request.topic,
                     "mode": request.mode,
                     "context_text": context_text,
+                    "active_skills": list(request.active_skills) if hasattr(request, 'active_skills') else [],
                     "created_at": time.time()
                 }
                 r.set(f"session:{request.session_id}", json.dumps(session_data), ex=86400)
@@ -155,6 +156,7 @@ class AgentServiceServicer(agent_pb2_grpc.AgentServiceServicer):
             user_id = "unknown"
             user_level = "intermediate"
             topic = "free talk"
+            active_skills = []
 
             if r:
                 try:
@@ -165,6 +167,7 @@ class AgentServiceServicer(agent_pb2_grpc.AgentServiceServicer):
                         user_level = data.get("user_level", "intermediate")
                         topic = data.get("topic", "free talk")
                         context_text = data.get("context_text", None)
+                        active_skills = data.get("active_skills", [])
                 except Exception as e:
                     logger.error(f"Error loading session metadata: {e}")
 
@@ -180,6 +183,7 @@ class AgentServiceServicer(agent_pb2_grpc.AgentServiceServicer):
                 "user_level": user_level,
                 "topic": topic,
                 "context_text": context_text if 'context_text' in locals() else None,
+                "active_skills": active_skills if 'active_skills' in locals() else [],
                 "mode": "full_duplex",
                 "current_audio_buffer": bytes(audio_buffer),
                 "is_user_speaking": False,
@@ -238,6 +242,7 @@ class AgentServiceServicer(agent_pb2_grpc.AgentServiceServicer):
                         is_finished=is_last,
                         chinglish=chinglish_pb if is_last else None,
                         refined_text=refined if is_last else "",
+                        user_transcript=result_state.get("user_transcript", "") if is_last else "",
                     )
                     time.sleep(0.03)
 

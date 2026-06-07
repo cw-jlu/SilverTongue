@@ -25,6 +25,7 @@ message StartSessionRequest {
   string user_level = 4;   // CEFR 等级
   string topic = 5;        // 练习场景主题
   string context_file_url = 6; // 场景辅助材料在 MinIO 中的路径
+  repeated string active_skills = 7; // 自由 Agent 模式下用户选择的 skill 列表
 }
 
 message StartSessionResponse {
@@ -46,6 +47,7 @@ message ChatStreamResponse {
   bool is_finished = 3;            // 本轮是否结束
   ChinglishAnalysis chinglish = 4; // 实时中式英语纠错
   string refined_text = 5;         // 地道表达推荐
+  string user_transcript = 6;      // 新增：用户语音识别转写文本
 }
 
 message ChinglishAnalysis {

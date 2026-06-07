@@ -5,6 +5,12 @@ spring:
   application:
     name: silvertongue-backend
 
+  # ===== Multipart 上传限制 =====
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
   # ===== MySQL =====
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:silvertongue}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
@@ -19,9 +25,8 @@ spring:
       port: ${REDIS_PORT:6379}
       database: 0
 
-    # ===== Elasticsearch =====
     elasticsearch:
-      uris: http://localhost:9201
+      uris: ${ES_URIS:http://localhost:9201}
 
 # ===== MyBatis-Plus =====
 mybatis-plus:
@@ -54,6 +59,10 @@ grpc:
     host: ${GRPC_AGENT_HOST:localhost}
     port: ${GRPC_AGENT_PORT:50051}
 
+ai:
+  agent:
+    base-url: ${AI_AGENT_BASE_URL:http://localhost:8089}
+
 # ===== JWT =====
 jwt:
   secret: ${JWT_SECRET:}
@@ -63,8 +72,9 @@ jwt:
 wechat:
   app-id: ${WECHAT_APP_ID:}
   app-secret: ${WECHAT_APP_SECRET:}
+  redirect-base-url: ${WECHAT_REDIRECT_BASE_URL:}
   oauth2:
-    authorize-url: https://open.weixin.qq.com/connect/oauth2/authorize
+    authorize-url: https://open.weixin.qq.com/connect/qrconnect
     access-token-url: https://api.weixin.qq.com/sns/oauth2/access_token
     user-info-url: https://api.weixin.qq.com/sns/userinfo
 
@@ -74,6 +84,9 @@ management:
     web:
       exposure:
         include: health,info,prometheus,metrics
+  health:
+    elasticsearch:
+      enabled: false
   metrics:
     tags:
       application: ${spring.application.name}

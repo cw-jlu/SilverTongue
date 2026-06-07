@@ -12,10 +12,20 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.1.0",
-    "axios": "^1.7.9"
+    "axios": "^1.7.9",
+    "wavesurfer.js": "^7.9.1",
+    "chart.js": "^4.4.8",
+    "react-audio-visualize": "^1.2.0",
+    "react-audio-voice-recorder": "^2.2.0",
+    "react-resizable-panels": "^2.1.7",
+    "lucide-react": "^0.479.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "vite": "^6.0.5"
+  },
+  "overrides": {
+    "react": "$react",
+    "react-dom": "$react-dom"
   }
 }

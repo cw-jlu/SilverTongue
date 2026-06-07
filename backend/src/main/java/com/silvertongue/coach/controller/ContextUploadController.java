@@ -39,7 +39,7 @@ public class ContextUploadController {
             @RequestParam("file") MultipartFile file) {
         
         if (file.isEmpty()) {
-            return ApiResult.error("File is empty");
+            return ApiResult.error(400, "File is empty");
         }
 
         try {
@@ -68,7 +68,7 @@ public class ContextUploadController {
             
         } catch (Exception e) {
             log.error("Failed to upload context file", e);
-            return ApiResult.error("Upload failed: " + e.getMessage());
+            return ApiResult.error(500, "Upload failed: " + e.getMessage());
         }
     }
 }

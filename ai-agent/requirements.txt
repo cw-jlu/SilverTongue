@@ -3,10 +3,14 @@
 # ===== Web & gRPC Framework =====
 fastapi==0.115.6
 uvicorn[standard]==0.32.1
-grpcio==1.66.0
-grpcio-tools==1.66.0
+grpcio==1.81.0
+grpcio-tools==1.81.0
+grpcio-health-checking==1.81.0
 
-protobuf==5.28.3
+protobuf==6.33.5
+
+# ===== Azure Speech SDK (发音评估) =====
+azure-cognitiveservices-speech==1.42.0
 
 # ===== AI / LLM =====
 langgraph==0.3.5
@@ -26,6 +30,7 @@ kafka-python==2.0.2
 
 # ===== Vector DB =====
 pymilvus==2.4.9
+marshmallow<3.22.0
 
 # ===== Full-text Search =====
 elasticsearch==8.15.0
@@ -44,5 +49,6 @@ python-dotenv==1.0.1
 numpy==1.26.4
 PyMuPDF==1.24.4
 python-docx==1.1.2
+yt-dlp>=2025.1.15
 
 azure-cognitiveservices-speech

@@ -30,8 +30,10 @@ class STTService:
         self._whisper_model = None
         self._api_client = None
 
-        # Try local first, then API
-        if self._init_local_whisper():
+        # Try stt.ai first, then local, then generic API
+        if self._init_stt_ai():
+            self.engine = "stt_ai"
+        elif self._init_local_whisper():
             self.engine = "local"
         elif self._init_api_whisper():
             self.engine = "api"
@@ -84,6 +86,14 @@ class STTService:
             logger.warning(f"STT: failed to init API client: {e}")
             return False
 
+    def _init_stt_ai(self) -> bool:
+        """Init stt.ai client."""
+        api_key = os.getenv("STT_AI_API_KEY", "")
+        if not api_key:
+            return False
+        logger.info("STT: using stt.ai API")
+        return True
+
     # ---- public API --------------------------------------------------------
 
     def transcribe(self, audio_data: bytes, language: str = "en") -> str:
@@ -100,7 +110,9 @@ class STTService:
         if not audio_data:
             return ""
 
-        if self.engine == "local":
+        if self.engine == "stt_ai":
+            return self._transcribe_stt_ai(audio_data, language)
+        elif self.engine == "local":
             return self._transcribe_local(audio_data, language)
         elif self.engine == "api":
             return self._transcribe_api(audio_data, language)
@@ -146,4 +158,44 @@ class STTService:
             return result.text.strip()
         except Exception as e:
             logger.error(f"STT API transcription error: {e}")
+            return ""
+
+    def _transcribe_stt_ai(self, audio_data: bytes, language: str) -> str:
+        import requests
+        api_key = os.getenv("STT_AI_API_KEY", "")
+        url = "https://api.stt.ai/v1/transcribe"
+        headers = {}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+            
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                f.write(audio_data)
+                f.flush()
+                tmp_path = f.name
+                
+            files = {
+                'file': open(tmp_path, 'rb')
+            }
+            data = {
+                'model': 'large-v3-turbo'
+            }
+            
+            response = requests.post(url, headers=headers, files=files, data=data)
+            
+            # Close and remove the temporary file safely
+            files['file'].close()
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+                
+            if response.status_code == 200:
+                result = response.json()
+                return result.get("text", "").strip()
+            else:
+                logger.error(f"STT.ai transcription error: {response.status_code} - {response.text}")
+                return ""
+        except Exception as e:
+            logger.error(f"STT.ai transcription exception: {e}")
             return ""

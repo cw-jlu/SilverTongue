@@ -1,0 +1,16 @@
+.git
+.gitignore
+.env
+.env.*
+**/node_modules
+# **/target
+# **/dist
+**/__pycache__
+**/.venv
+**/venv
+**/.idea
+**/.vscode
+**/.DS_Store
+**/*.pyc
+PageIndex-main/
+all_files.txt

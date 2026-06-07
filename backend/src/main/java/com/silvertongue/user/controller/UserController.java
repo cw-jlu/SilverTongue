@@ -7,7 +7,9 @@ import com.silvertongue.user.dto.LoginResponse;
 import com.silvertongue.user.dto.RegisterRequest;
 import com.silvertongue.user.dto.UserProfileResponse;
 import com.silvertongue.user.dto.WxBindRequest;
+import com.silvertongue.user.service.WeChatService;
 import com.silvertongue.user.service.UserService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
 
     private final UserService userService;
+    private final WeChatService weChatService;
 
     @PostMapping("/register")
     public ApiResult<UserProfileResponse> register(@Valid @RequestBody RegisterRequest request) {
@@ -46,6 +49,15 @@ public class UserController {
     @GetMapping("/wx/callback")
     public ApiResult<LoginResponse> wxCallback(@RequestParam("code") String code) {
         return ApiResult.success(userService.wxLogin(code));
+    }
+
+    @GetMapping("/wx/authorize-url")
+    public ApiResult<String> wxAuthorizeUrl(
+            HttpServletRequest request,
+            @RequestParam(value = "state", required = false) String state
+    ) {
+        String redirectUri = request.getParameter("redirectUri");
+        return ApiResult.success(weChatService.buildAuthorizeUrl(redirectUri, state));
     }
 
     /**

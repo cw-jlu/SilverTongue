@@ -27,8 +27,14 @@ public class PracticeSession {
 
     private String contextFileUrl;
 
+    /** CEFR 等级 (如 A2, B1, B2, C1) */
+    private String userLevel;
+
     /** 0: 进行中, 1: 已完成 */
     private Integer status;
+
+    /** 练习时长（秒） */
+    private Integer durationSeconds;
 
     private LocalDateTime createTime;
 

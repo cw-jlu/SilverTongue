@@ -19,7 +19,9 @@ public class SessionVO {
     private String mode;
     private String topic;
     private String contextFileUrl;
+    private String userLevel;
     private Integer status;
+    private Integer durationSeconds;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }
