@@ -126,7 +126,7 @@ async def stt_transcribe(payload: dict = Body(...)):
 
 
 async def _run_harvester_job(job: HarvesterJobRequest):
-    from services.harvester import process_clip
+    from services.harvester import notify_backend, process_clip
 
     logger.info(
         "Running harvester job clip_id={}, url={}, start_time={}, end_time={}",
@@ -142,13 +142,21 @@ async def _run_harvester_job(job: HarvesterJobRequest):
         job.start_time,
         job.end_time,
     )
+    return job.clip_id
 
 
-def _on_harvester_task_done(task: asyncio.Task):
+def _on_harvester_task_done(task: asyncio.Task, clip_id: int | None = None):
     _harvester_tasks.discard(task)
     try:
         task.result()
     except Exception as exc:
+        if clip_id is not None:
+            try:
+                from services.harvester import notify_backend
+
+                notify_backend(clip_id, 4, "")
+            except Exception as notify_exc:
+                logger.exception("Failed to notify backend for failed harvester job {}: {}", clip_id, notify_exc)
         logger.exception("Harvester job failed: {}", exc)
 
 
@@ -156,7 +164,7 @@ def _on_harvester_task_done(task: asyncio.Task):
 async def create_harvester_job(payload: HarvesterJobRequest):
     task = asyncio.create_task(_run_harvester_job(payload))
     _harvester_tasks.add(task)
-    task.add_done_callback(_on_harvester_task_done)
+    task.add_done_callback(lambda done_task: _on_harvester_task_done(done_task, payload.clip_id))
     return {
         "status": "accepted",
         "clipId": payload.clip_id,

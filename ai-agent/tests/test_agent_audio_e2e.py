@@ -1,105 +1,92 @@
 import os
 import sys
-import wave
-import struct
-import math
-from loguru import logger
+import types
 
-# Ensure the parent directory is in the path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-# Set up environment variables to ensure ModelRouter uses DeepSeek
-os.environ["DEEPSEEK_API_KEY"] = "sk-46a31dc5807046e0bdef7d369365d724"
-os.environ["DEEPSEEK_MODEL"] = "deepseek-chat"
+embedding_module = types.ModuleType("services.embedding")
+
+
+class DummyVectorDBClient:
+    def __init__(self):
+        self.collection = None
+
+    def search(self, user_id, query_text, top_k=3):
+        return []
+
+
+embedding_module.VectorDBClient = DummyVectorDBClient
+sys.modules["services.embedding"] = embedding_module
 
 from agent.graph import create_agent_graph
-from agent.nodes import configure_nodes
-from services.model_router import ModelRouter
-from services.stt_service import STTService
-from services.tts_service import TTSService
-from services.conversation_store import ConversationStore
+import agent.nodes as nodes
+from services.providers.base import ModelCapability, ModelResponse
 
-def generate_dummy_wav(filename="dummy_input.wav"):
-    """Generate a 1-second silent WAV file for testing."""
-    sample_rate = 16000
-    duration = 1.0
-    with wave.open(filename, "wb") as wav_file:
-        wav_file.setnchannels(1)
-        wav_file.setsampwidth(2)
-        wav_file.setframerate(sample_rate)
-        data = struct.pack('<h', 0) * int(sample_rate * duration)
-        wav_file.writeframes(data)
-    return filename
 
-def test_full_audio_pipeline():
-    logger.info("Initializing services for E2E graph test...")
-    router = ModelRouter()
-    stt = STTService()
-    tts = TTSService()
-    store = ConversationStore()
-    
-    logger.info("Configuring LangGraph nodes with real services...")
-    configure_nodes(router, stt, tts, store)
-    
-    logger.info("Creating graph...")
+class FakeVoiceRouter:
+    class Provider:
+        name = "fake-audio"
+        capability = ModelCapability.TEXT_ONLY
+        supports_voice = False
+
+        def chat(self, messages, audio_data=None, **kwargs):
+            return ModelResponse(text="Thanks, let's continue.")
+
+    def __init__(self):
+        self.provider = self.Provider()
+
+    def select(self, prefer_voice=False):
+        return self.provider
+
+
+class FakeSttService:
+    def transcribe(self, audio_data, language="en"):
+        return "This is my spoken answer."
+
+
+class FakeTtsService:
+    def synthesize(self, text, voice=None):
+        return b"voice-bytes"
+
+
+class FakeConversationStore:
+    def persist_message(self, **kwargs):
+        return None
+
+
+def test_audio_pipeline_uses_stt_and_tts_without_real_backends():
+    nodes.vector_db.collection = None
+    nodes.configure_nodes(
+        FakeVoiceRouter(),
+        FakeSttService(),
+        FakeTtsService(),
+        FakeConversationStore(),
+    )
+
     app = create_agent_graph()
-    
-    # Generate mock audio buffer
-    wav_path = generate_dummy_wav()
-    try:
-        with open(wav_path, "rb") as f:
-            audio_buffer = f.read()
-            
-        logger.info("Preparing initial state with user audio buffer...")
-        initial_state = {
-            "session_id": "test_e2e_session_999",
-            "user_id": "user_tester",
+    result_state = app.invoke(
+        {
+            "session_id": "audio-session-1",
+            "user_id": "user-audio",
             "mode": "free_talk",
-            "user_level": "intermediate",
+            "user_level": "B1",
             "topic": "Daily Greeting",
-            "context_text": "Introduce yourself.",
+            "context_text": None,
             "messages": [],
-            "current_audio_buffer": audio_buffer,
+            "current_audio_buffer": b"\xff\xfe\xfa\xfb",
             "is_user_speaking": False,
             "turn_taken": True,
+            "active_skills": [],
             "chinglish_analysis": {},
             "refined_text": None,
             "user_transcript": "",
             "response_audio": b"",
+            "selected_provider": "",
+            "model_capability": "",
+            "next_node": "",
         }
-        
-        logger.info("Invoking LangGraph with audio input...")
-        result_state = app.invoke(initial_state)
-        
-        logger.info("=" * 60)
-        logger.info("E2E GRAPH TEST COMPLETE")
-        logger.info("=" * 60)
-        
-        user_transcript = result_state.get("user_transcript", "")
-        response_audio = result_state.get("response_audio", b"")
-        messages = result_state.get("messages", [])
-        
-        # Verify STT executed
-        logger.info(f"User transcript: '{user_transcript}'")
-        assert isinstance(user_transcript, str), "Should have transcribed to string"
-        
-        # Verify LLM replied
-        if messages:
-            ai_reply = messages[-1].get("content", "")
-            logger.info(f"AI reply: '{ai_reply}'")
-            assert len(ai_reply) > 0, "AI reply should not be empty"
-        else:
-            raise AssertionError("No messages in state")
-            
-        # Verify TTS executed
-        logger.info(f"Response audio size: {len(response_audio)} bytes")
-        assert len(response_audio) > 0, "Should have synthesized response audio"
-        
-        logger.info("🎉 E2E Audio Pipeline successfully verified and fully connected!")
-        
-    finally:
-        if os.path.exists(wav_path):
-            os.remove(wav_path)
+    )
 
-if __name__ == "__main__":
-    test_full_audio_pipeline()
+    assert result_state["user_transcript"] == "This is my spoken answer."
+    assert result_state["messages"][-1]["content"] == "Thanks, let's continue."
+    assert result_state["response_audio"] == b"voice-bytes"
