@@ -26,7 +26,7 @@ const PLAY_MODES = {
 };
 
 // ---------------------------------------------------------------------------
-// 主组件
+// 主组�?
 // ---------------------------------------------------------------------------
 export default function Shadowing() {
   // -- 剪辑列表 --
@@ -34,8 +34,15 @@ export default function Shadowing() {
   const [selectedClip, setSelectedClip] = useState(null);
   const [file, setFile] = useState(null);
   const [uploadMsg, setUploadMsg] = useState('');
+  const [uploadedMaterial, setUploadedMaterial] = useState(null);
+  const [clipDraft, setClipDraft] = useState({
+    startTime: '0',
+    endTime: '10',
+    content: '',
+    translation: '',
+  });
 
-  // -- 播放状态 --
+  // -- 播放状�?--
   const [playbackRate, setPlaybackRate] = useState(1.0);
   const [playMode, setPlayMode] = useState('single');
   const [currentSegment, setCurrentSegment] = useState(0);
@@ -63,10 +70,10 @@ export default function Shadowing() {
   const [dictResult, setDictResult] = useState(null);
   const [dictLoading, setDictLoading] = useState(false);
 
-  // -- 变速弹窗 --
+  // -- 变速弹�?--
   const [speedOpen, setSpeedOpen] = useState(false);
 
-  // -- 录音器 --
+  // -- 录音�?--
   const {
     startRecording,
     stopRecording,
@@ -95,16 +102,48 @@ export default function Shadowing() {
     fd.append('file', file);
     try {
       const r = await api.post('/material/upload', fd);
-      setUploadMsg(`上传成功: ${r.data?.title || file.name}`);
+      const material = r.data || r;
+      setUploadedMaterial(material);
+      setClipDraft((draft) => ({
+        ...draft,
+        content: draft.content || material?.title || file.name,
+      }));
+      setUploadMsg(`Material uploaded: ${material?.title || file.name}. Create a clip to continue.`);
       setFile(null);
-      loadClips();
     } catch (err) {
-      setUploadMsg(err?.message || '上传失败');
+      setUploadMsg(err?.message || 'Upload failed');
+    }
+  };
+
+  const createClipFromUpload = async () => {
+    if (!uploadedMaterial) return;
+
+    try {
+      const r = await api.post('/clips', {
+        materialId: uploadedMaterial.id,
+        startTime: Number(clipDraft.startTime || 0),
+        endTime: Number(clipDraft.endTime || 0),
+        content: clipDraft.content,
+        translation: clipDraft.translation,
+      });
+      const clip = r.data || r;
+      await loadClips();
+      selectClip(clip);
+      setUploadedMaterial(null);
+      setClipDraft({
+        startTime: '0',
+        endTime: '10',
+        content: '',
+        translation: '',
+      });
+      setUploadMsg('Clip created. You can start shadowing now.');
+    } catch (err) {
+      setUploadMsg(err?.message || 'Clip creation failed');
     }
   };
 
   // -------------------------------------------------------------------
-  // 选择剪辑 → 初始化 WaveSurfer
+  // 选择剪辑 �?初始�?WaveSurfer
   // -------------------------------------------------------------------
   const selectClip = useCallback((clip) => {
     setSelectedClip(clip);
@@ -115,7 +154,7 @@ export default function Shadowing() {
   }, []);
 
   // -------------------------------------------------------------------
-  // WaveSurfer 初始化
+  // WaveSurfer 初始�?
   // -------------------------------------------------------------------
   useEffect(() => {
     if (!selectedClip || !waveformContainerRef.current) return;
@@ -127,7 +166,7 @@ export default function Shadowing() {
       wsRegionsRef.current = null;
     }
 
-    // 构建音频 URL：优先使用 clip 的 audioPath，否则用 MinIO URL
+    // 构建音频 URL：优先使�?clip �?audioPath，否则用 MinIO URL
     const audioUrl =
       selectedClip.audioPath ||
       selectedClip.sourceUrl ||
@@ -153,12 +192,12 @@ export default function Shadowing() {
       setDuration(ws.getDuration());
       setWsReady(true);
 
-      // 如果有字幕/transcription，解析为 segments
+      // 如果有字�?transcription，解析为 segments
       const trans = selectedClip.transcription;
       if (trans && trans.timeline) {
         setSegments(trans.timeline);
       } else if (selectedClip.content) {
-        // 简单地将文本按句分割
+        // 简单地将文本按句分�?
         const text = selectedClip.content;
         const dur = ws.getDuration();
         const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
@@ -208,7 +247,7 @@ export default function Shadowing() {
   }, [playbackRate]);
 
   // -------------------------------------------------------------------
-  // 播放模式 — 更新 region
+  // 播放模式 �?更新 region
   // -------------------------------------------------------------------
   useEffect(() => {
     const ws = wavesurferRef.current;
@@ -260,7 +299,7 @@ export default function Shadowing() {
       const url = URL.createObjectURL(liveBlob);
       setRecordingUrl(url);
 
-      // 初始化录音波形
+      // 初始化录音波�?
       if (recordingContainerRef.current) {
         if (recordingWsRef.current) recordingWsRef.current.destroy();
 
@@ -331,7 +370,7 @@ export default function Shadowing() {
   };
 
   // -------------------------------------------------------------------
-  // 格式化时间
+  // 格式化时�?
   // -------------------------------------------------------------------
   const fmt = (s) => {
     const m = Math.floor(s / 60);
@@ -369,10 +408,60 @@ export default function Shadowing() {
             <span style={{ fontSize: 13, color: '#6b7280' }}>{uploadMsg}</span>
           )}
         </div>
+        {uploadedMaterial && (
+          <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+              <input
+                className="input"
+                type="number"
+                min="0"
+                step="0.1"
+                value={clipDraft.startTime}
+                onChange={(e) => setClipDraft((draft) => ({ ...draft, startTime: e.target.value }))}
+                placeholder="Start time (s)"
+              />
+              <input
+                className="input"
+                type="number"
+                min="0.1"
+                step="0.1"
+                value={clipDraft.endTime}
+                onChange={(e) => setClipDraft((draft) => ({ ...draft, endTime: e.target.value }))}
+                placeholder="End time (s)"
+              />
+            </div>
+            <input
+              className="input"
+              value={clipDraft.content}
+              onChange={(e) => setClipDraft((draft) => ({ ...draft, content: e.target.value }))}
+              placeholder="Clip text"
+            />
+            <input
+              className="input"
+              value={clipDraft.translation}
+              onChange={(e) => setClipDraft((draft) => ({ ...draft, translation: e.target.value }))}
+              placeholder="Translation (optional)"
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-sm btn-primary" onClick={createClipFromUpload}>
+                <Scissors size={14} style={{ marginRight: 4 }} /> Create clip
+              </button>
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={() => {
+                  setUploadedMaterial(null);
+                  setUploadMsg('');
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ================================================================ */}
-      {/* 主布局：剪辑列表 + 播放器 */}
+      {/* 主布局：剪辑列�?+ 播放�?*/}
       {/* ================================================================ */}
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
         {/* ---- 左侧剪辑列表 ---- */}
@@ -395,10 +484,10 @@ export default function Shadowing() {
               }}
             >
               <p style={{ margin: 0, fontSize: 13, fontWeight: 500 }}>
-                {c.content ? c.content.slice(0, 60) + (c.content.length > 60 ? '...' : '') : '(无字幕)'}
+                {c.content ? c.content.slice(0, 60) + (c.content.length > 60 ? '...' : '') : '(无字�?'}
               </p>
               <small style={{ color: '#9ca3af' }}>
-                ⏱ {c.startTime}s – {c.endTime}s
+                �?{c.startTime}s �?{c.endTime}s
               </small>
             </div>
           ))}
@@ -417,12 +506,12 @@ export default function Shadowing() {
                 color: '#9ca3af',
               }}
             >
-              请从左侧选择一个语料切片开始跟读
+              请从左侧选择一个语料切片开始跟�?
             </div>
           ) : (
             <PanelGroup direction="vertical" style={{ height: 560 }}>
               {/* ==================================================== */}
-              {/* 上栏：原声波形 + 播放控制 */}
+              {/* 上栏：原声波�?+ 播放控制 */}
               {/* ==================================================== */}
               <Panel defaultSize={55} minSize={30}>
                 <div className="card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -437,7 +526,7 @@ export default function Shadowing() {
                     {fmt(currentTime)} / {fmt(duration)}
                   </div>
 
-                  {/* ============ 播放控制栏 ============ */}
+                  {/* ============ 播放控制�?============ */}
                   <div
                     style={{
                       display: 'flex',
@@ -449,7 +538,7 @@ export default function Shadowing() {
                       marginTop: 8,
                     }}
                   >
-                    {/* 变速 */}
+                    {/* 变�?*/}
                     <div style={{ position: 'relative' }}>
                       <button
                         className="btn btn-sm btn-ghost"
@@ -501,7 +590,7 @@ export default function Shadowing() {
                       <PlayModeIcon size={16} />
                     </button>
 
-                    {/* 上一段 */}
+                    {/* 上一�?*/}
                     <button className="btn btn-sm btn-ghost" onClick={prevSegment} disabled={currentSegment === 0}>
                       <SkipBack size={18} />
                     </button>
@@ -515,7 +604,7 @@ export default function Shadowing() {
                       <PlayIcon size={20} fill="white" />
                     </button>
 
-                    {/* 下一段 */}
+                    {/* 下一�?*/}
                     <button className="btn btn-sm btn-ghost" onClick={nextSegment} disabled={currentSegment >= segments.length - 1}>
                       <SkipForward size={18} />
                     </button>
@@ -523,12 +612,12 @@ export default function Shadowing() {
                     {/* 段落指示 */}
                     {segments.length > 0 && (
                       <span style={{ fontSize: 12, color: '#6b7280', marginLeft: 8 }}>
-                        第 {currentSegment + 1}/{segments.length} 段
+                        �?{currentSegment + 1}/{segments.length} �?
                       </span>
                     )}
                   </div>
 
-                  {/* ============ 字幕显示 (可选) ============ */}
+                  {/* ============ 字幕显示 (可�? ============ */}
                   {segments.length > 0 && (
                     <div
                       className="caption-area"
@@ -567,11 +656,11 @@ export default function Shadowing() {
               <PanelResizeHandle style={{ height: 6, background: '#e5e7eb', borderRadius: 3, margin: '4px 0' }} />
 
               {/* ==================================================== */}
-              {/* 下栏：用户录音 */}
+              {/* 下栏：用户录�?*/}
               {/* ==================================================== */}
               <Panel defaultSize={45} minSize={20}>
                 <div className="card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                  {/* 录音中 */}
+                  {/* 录音�?*/}
                   {isRecording ? (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
                       <LiveAudioVisualizer
@@ -594,7 +683,7 @@ export default function Shadowing() {
                           style={{ borderRadius: '50%', width: 36, height: 36 }}
                           onClick={() => {
                             stopRecording();
-                            // 取消（不保存）
+                            // 取消（不保存�?
                           }}
                           title="取消"
                         >
@@ -651,12 +740,12 @@ export default function Shadowing() {
                           }}
                         >
                           <p style={{ margin: 0, fontWeight: 600, color: '#166534' }}>
-                            📈 得分: {assessmentResult.finalScore?.toFixed(1) || '—'} / 100
+                            Score: {assessmentResult.finalScore?.toFixed(1) || '--'} / 100
                           </p>
                           <div style={{ display: 'flex', gap: 16, fontSize: 13, color: '#4b5563', marginTop: 4 }}>
-                            <span>准确度: {assessmentResult.accuracy?.toFixed(1) || '—'}</span>
-                            <span>流利度: {assessmentResult.fluency?.toFixed(1) || '—'}</span>
-                            <span>完整度: {assessmentResult.completeness?.toFixed(1) || '—'}</span>
+                            <span>Accuracy: {assessmentResult.accuracy?.toFixed(1) || '--'}</span>
+                            <span>Fluency: {assessmentResult.fluency?.toFixed(1) || '--'}</span>
+                            <span>Completeness: {assessmentResult.completeness?.toFixed(1) || '--'}</span>
                           </div>
                           {assessmentResult.words && (
                             <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -681,7 +770,7 @@ export default function Shadowing() {
                       )}
                     </div>
                   ) : (
-                    /* 无录音 */
+                    /* 无录�?*/
                     <div
                       style={{
                         flex: 1,
@@ -694,7 +783,7 @@ export default function Shadowing() {
                         className="btn btn-danger"
                         style={{ borderRadius: '50%', width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         onClick={startRecording}
-                        title="开始跟读录音"
+                        title="Start recording"
                       >
                         <Mic size={24} fill="white" />
                       </button>
@@ -739,7 +828,7 @@ export default function Shadowing() {
             </div>
 
             {dictLoading ? (
-              <p style={{ color: '#9ca3af' }}>查询中...</p>
+              <p style={{ color: '#9ca3af' }}>查询�?..</p>
             ) : dictResult?.found ? (
               dictResult.entries.map((entry, i) => (
                 <div key={i} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #f3f4f6' }}>
@@ -770,7 +859,7 @@ export default function Shadowing() {
                 </div>
               ))
             ) : (
-              <p style={{ color: '#9ca3af' }}>未找到 "{dictWord}" 的释义</p>
+              <p style={{ color: '#9ca3af' }}>No dictionary entry found for "{dictWord}".</p>
             )}
           </div>
         </div>

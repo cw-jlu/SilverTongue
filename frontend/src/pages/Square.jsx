@@ -32,7 +32,7 @@ export default function Square() {
   const loadPosts = async () => {
     try {
       const res = await api.get('/post/list');
-      setPosts((res.data || []).map(normalizePost));
+      setPosts((res || []).map(normalizePost));
     } catch (e) {
       console.error('Load posts failed', e);
     }
@@ -66,7 +66,7 @@ export default function Square() {
     }
     try {
       const res = await api.get(`/post/search?q=${encodeURIComponent(search)}`);
-      setPosts((res.data || []).map(normalizePost));
+      setPosts((res || []).map(normalizePost));
     } catch (e) {
       console.error('Search failed', e);
     }

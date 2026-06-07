@@ -52,7 +52,7 @@ export default function Login() {
 
     try {
       const res = await api.post('/user/login', { username, password });
-      persistLogin(res.data);
+      persistLogin(res);
       navigate('/');
     } catch (err) {
       setError(err?.message || '登录失败，请检查用户名或密码');
@@ -71,7 +71,7 @@ export default function Login() {
 
     try {
       const res = await api.get('/user/wx/authorize-url');
-      window.location.href = res.data;
+      window.location.href = res;
     } catch (err) {
       setError(err?.message || '微信登录暂时不可用，请稍后重试');
     }
