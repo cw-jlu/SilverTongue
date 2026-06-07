@@ -14,7 +14,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
- * gRPC 客户端 — 调用 Python Agent 的 AgentService (会话控制与交互)
+ * gRPC 客户端 - 调用 Python Agent 的 AgentService（会话控制与交互）
  */
 @Slf4j
 @Service
@@ -31,12 +31,12 @@ public class AgentGrpcClient {
     /**
      * 调用 Python Agent 开启对练会话，在 Redis 中初始化会话状态和角色设定
      *
-     * @param userId    用户 ID
+     * @param userId 用户 ID
      * @param sessionId 会话 ID
-     * @param mode      交互模式 (full_duplex, half_duplex, guided, free_talk)
+     * @param mode 交互模式 (full_duplex, half_duplex, guided, free_talk)
      * @param userLevel CEFR 等级 (如 B2)
-     * @param topic     角色/场景 (如 "雅思考官", "日常闲聊")
-     * @param contextFileUrl 场景辅助材料URL
+     * @param topic 角色/场景 (如 "雅思考官", "日常闲聊")
+     * @param contextFileUrl 场景辅助材料 URL
      * @return 是否开启成功
      */
     public boolean startSession(String userId, String sessionId, String mode, String userLevel, String topic, String contextFileUrl) {
@@ -46,11 +46,11 @@ public class AgentGrpcClient {
                 .setMode(mode)
                 .setUserLevel(userLevel)
                 .setTopic(topic);
-                
+
         if (contextFileUrl != null && !contextFileUrl.isBlank()) {
             requestBuilder.setContextFileUrl(contextFileUrl);
         }
-        
+
         StartSessionRequest request = requestBuilder.build();
 
         log.info("Calling gRPC StartSession: userId={}, sessionId={}, mode={}, level={}, topic={}, contextFileUrl={}",
@@ -75,7 +75,7 @@ public class AgentGrpcClient {
      * 语音/文本对话流桥接，利用 StreamObserver 和 CountDownLatch 实现同步等待流结束
      *
      * @param sessionId 会话 ID
-     * @param data      音频 PCM 或文本 UTF-8 字节
+     * @param data 音频 PCM 或文本 UTF-8 字节
      * @return AI 响应数据汇总
      */
     public ChatStreamResult chatStream(String sessionId, byte[] data) {
@@ -151,7 +151,9 @@ public class AgentGrpcClient {
         String chinglishFeedback = "";
         if (chinglishContainer[0] != null) {
             ChinglishAnalysis ca = chinglishContainer[0];
-            chinglishFeedback = "检测到中式英语: " + ca.getOriginalPattern() + " \n建议: " + ca.getSuggestion() + " \n严重程度: " + ca.getSeverity();
+            chinglishFeedback = "检测到中式英语: " + ca.getOriginalPattern()
+                    + "\n建议: " + ca.getSuggestion()
+                    + "\n严重程度: " + ca.getSeverity();
         }
 
         return new ChatStreamResult(
@@ -166,8 +168,8 @@ public class AgentGrpcClient {
     /**
      * 获取句式引导表达（脚手架）
      *
-     * @param sessionId      会话 ID
-     * @param incompleteText 输入的一半句式
+     * @param sessionId 会话 ID
+     * @param incompleteText 输入的一半句子
      * @return 引导提示列表
      */
     public List<String> getScaffolding(String sessionId, String incompleteText) {
@@ -202,10 +204,24 @@ public class AgentGrpcClient {
             this.userTranscript = userTranscript;
         }
 
-        public String getReplyText() { return replyText; }
-        public byte[] getAudioBytes() { return audioBytes; }
-        public String getRefinedText() { return refinedText; }
-        public String getChinglishFeedback() { return chinglishFeedback; }
-        public String getUserTranscript() { return userTranscript; }
+        public String getReplyText() {
+            return replyText;
+        }
+
+        public byte[] getAudioBytes() {
+            return audioBytes;
+        }
+
+        public String getRefinedText() {
+            return refinedText;
+        }
+
+        public String getChinglishFeedback() {
+            return chinglishFeedback;
+        }
+
+        public String getUserTranscript() {
+            return userTranscript;
+        }
     }
 }
