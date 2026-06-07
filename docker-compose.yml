@@ -133,7 +133,14 @@ services:
       LOCAL_MIN_VRAM_GB: ${LOCAL_MIN_VRAM_GB:-200}
       STT_MODEL_SIZE: ${STT_MODEL_SIZE:-large-v3}
       STT_API_KEY: ${STT_API_KEY:-}
+      STT_AI_API_KEY: ${STT_AI_API_KEY:-}
+      STT_FORCE_API: ${STT_FORCE_API:-false}
       TTS_VOICE: ${TTS_VOICE:-en-US-AriaNeural}
+      TTS_USE_FREETTS: ${TTS_USE_FREETTS:-false}
+      TTS_AI_API_KEY: ${TTS_AI_API_KEY:-}
+      TTS_AI_BASE_URL: ${TTS_AI_BASE_URL:-https://tts.ai/v1}
+      TTS_AI_MODEL: ${TTS_AI_MODEL:-kokoro}
+      TTS_AI_VOICE: ${TTS_AI_VOICE:-af_bella}
       MFA_ENABLED: ${MFA_ENABLED:-false}
       AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
       AZURE_SPEECH_REGION: ${AZURE_SPEECH_REGION:-eastasia}
