@@ -29,7 +29,11 @@ class TTSService:
         self.engine: str = "none"
         self._api_client = None
 
-        if self._init_edge_tts():
+        if self._init_tts_ai():
+            self.engine = "tts_ai"
+        elif self._init_freetts():
+            self.engine = "freetts"
+        elif self._init_edge_tts():
             self.engine = "edge_tts"
         elif self._init_api_tts():
             self.engine = "api"
@@ -65,6 +69,20 @@ class TTSService:
             logger.warning(f"TTS: failed to init API client: {e}")
             return False
 
+    def _init_tts_ai(self) -> bool:
+        api_key = os.getenv("TTS_AI_API_KEY", "")
+        if not api_key:
+            return False
+        base_url = os.getenv("TTS_AI_BASE_URL", "https://tts.ai/v1")
+        logger.info(f"TTS: using tts.ai API at {base_url}")
+        return True
+
+    def _init_freetts(self) -> bool:
+        if os.getenv("TTS_USE_FREETTS", "").lower() != "true":
+            return False
+        logger.info("TTS: using FreeTTS.org API")
+        return True
+
     # ---- public API --------------------------------------------------------
 
     def synthesize(self, text: str, voice: Optional[str] = None) -> bytes:
@@ -82,7 +100,11 @@ class TTSService:
         if not text.strip():
             return b""
 
-        if self.engine == "edge_tts":
+        if self.engine == "tts_ai":
+            return self._synthesize_tts_ai(text, voice)
+        elif self.engine == "freetts":
+            return self._synthesize_freetts(text, voice)
+        elif self.engine == "edge_tts":
             return self._synthesize_edge(text, voice)
         elif self.engine == "api":
             return self._synthesize_api(text, voice)
@@ -138,3 +160,76 @@ class TTSService:
         except Exception as e:
             logger.error(f"TTS API error: {e}")
             return b""
+
+    def _synthesize_tts_ai(self, text: str, voice: Optional[str]) -> bytes:
+        import requests
+        voice = voice or os.getenv("TTS_AI_VOICE", "af_bella")
+        model = os.getenv("TTS_AI_MODEL", "kokoro")
+        api_key = os.getenv("TTS_AI_API_KEY", "")
+        base_url = os.getenv("TTS_AI_BASE_URL", "https://tts.ai/v1")
+        url = f"{base_url.rstrip('/')}/audio/speech"
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": model,
+            "voice": voice,
+            "input": text
+        }
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+            if response.status_code == 200:
+                return response.content
+            else:
+                logger.error(f"TTS tts.ai error: {response.status_code} - {response.text}")
+                return b""
+        except Exception as e:
+            logger.error(f"TTS tts.ai exception: {e}")
+            return b""
+
+    def _synthesize_freetts(self, text: str, voice: Optional[str]) -> bytes:
+        import requests
+        import time
+        voice = voice or "zh-CN-XiaoxiaoNeural"
+        
+        # FreeTTS has a 1000 char limit
+        if len(text) > 1000:
+            logger.warning(f"FreeTTS text too long ({len(text)} chars), truncating to 1000")
+            text = text[:1000]
+
+        url_tts = "https://freetts.org/api/tts"
+        headers = {
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "text": text,
+            "voice": voice,
+            "rate": "+0%",
+            "pitch": "+0Hz"
+        }
+        
+        try:
+            response = requests.post(url_tts, headers=headers, json=payload)
+            if response.status_code == 200:
+                res_data = response.json()
+                file_id = res_data.get("file_id")
+                if not file_id:
+                    logger.error(f"FreeTTS returned no file_id: {res_data}")
+                    return b""
+                
+                download_url = f"https://freetts.org/api/audio/{file_id}"
+                time.sleep(1) 
+                
+                audio_response = requests.get(download_url)
+                if audio_response.status_code == 200:
+                    return audio_response.content
+                else:
+                    logger.error(f"FreeTTS download failed, status: {audio_response.status_code}")
+            else:
+                logger.error(f"FreeTTS synthesis failed, status: {response.status_code} - {response.text}")
+        except Exception as e:
+            logger.error(f"FreeTTS exception: {e}")
+            
+        return b""
