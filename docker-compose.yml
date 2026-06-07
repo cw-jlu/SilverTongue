@@ -96,6 +96,7 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-silvertongue_minio}
       GRPC_AGENT_HOST: ai-agent
       GRPC_AGENT_PORT: 50051
+      AI_AGENT_BASE_URL: http://ai-agent:8089
       JWT_SECRET: ${JWT_SECRET:-change-me-in-.env}
       WECHAT_APP_ID: ${WECHAT_APP_ID:-wx_demo_id}
       WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-wx_demo_secret}
@@ -105,6 +106,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      ai-agent:
+        condition: service_started
 
   ai-agent:
     build:
@@ -120,6 +123,11 @@ services:
       MILVUS_PORT: 19530
       ES_URIS: http://elasticsearch:9200
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      BACKEND_URL: http://backend:8080
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-silvertongue}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-silvertongue_minio}
+      MINIO_BUCKET: st-materials
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
       LLM_MODEL: ${LLM_MODEL:-gpt-4o}
@@ -147,6 +155,7 @@ services:
     depends_on:
       - redis
       - kafka
+      - minio
 
   frontend:
     build:

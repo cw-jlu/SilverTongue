@@ -21,4 +21,10 @@ public class RoomParticipant {
     private LocalDateTime joinTime;
 
     private LocalDateTime leaveTime;
+
+    private Integer role; // 0: participant, 1: creator
+
+    private String aiRoleName;
+
+    private String aiRoleSetting;
 }

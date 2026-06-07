@@ -9,12 +9,16 @@ import com.silvertongue.harvester.mapper.ClipMapper;
 import com.silvertongue.harvester.mapper.MaterialMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.codec.digest.DigestUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -22,12 +26,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ClipService {
 
+    private static final Set<String> SUPPORTED_PLATFORMS = Set.of("youtube");
+
     private final ClipMapper clipMapper;
     private final MaterialMapper materialMapper;
 
-    /**
-     * 从素材创建切片
-     */
+    @Value("${ai.agent.base-url:http://localhost:8089}")
+    private String aiAgentBaseUrl;
+
     @Transactional
     public ClipVO create(ClipCreateRequest request) {
         Material material = materialMapper.selectById(request.getMaterialId());
@@ -35,7 +41,6 @@ public class ClipService {
             throw new IllegalArgumentException("material not found");
         }
 
-        // 校验时间范围
         if (request.getStartTime().compareTo(request.getEndTime()) >= 0) {
             throw new IllegalArgumentException("startTime must be before endTime");
         }
@@ -52,14 +57,12 @@ public class ClipService {
         clip.setCreateTime(LocalDateTime.now());
         clipMapper.insert(clip);
 
-        log.info("Clip created: id={}, materialId={}, time=[{}-{}]", clip.getId(), request.getMaterialId(), request.getStartTime(), request.getEndTime());
+        log.info("Clip created: id={}, materialId={}, time=[{}-{}]",
+                clip.getId(), request.getMaterialId(), request.getStartTime(), request.getEndTime());
 
         return toVO(clip);
     }
 
-    /**
-     * 查询某素材下的所有切片
-     */
     public List<ClipVO> listByMaterial(Long materialId) {
         List<Clip> clips = clipMapper.selectList(new LambdaQueryWrapper<Clip>()
                 .eq(Clip::getMaterialId, materialId)
@@ -67,9 +70,6 @@ public class ClipService {
         return clips.stream().map(this::toVO).collect(Collectors.toList());
     }
 
-    /**
-     * 分页查询切片列表
-     */
     public List<ClipVO> listAll(int page, int size) {
         int offset = (page - 1) * size;
         List<Clip> clips = clipMapper.selectList(new LambdaQueryWrapper<Clip>()
@@ -78,51 +78,38 @@ public class ClipService {
         return clips.stream().map(this::toVO).collect(Collectors.toList());
     }
 
-    /**
-     * 浏览器插件采集：创建 Material + Clip，返回 clipId
-     */
     @Transactional
     public ClipVO harvest(String url, String platform, Double startTime, Double endTime) {
-        // 1. 创建/查找 Material
-        Material material = new Material();
-        material.setMd5(org.apache.commons.codec.digest.DigestUtils.md5Hex(url));
-        material.setTitle("Harvested from " + platform);
-        material.setType("video");
-        material.setSourceUrl(url);
-        material.setStatus(1); // 下载中
-        material.setCreateTime(LocalDateTime.now());
-        material.setUpdateTime(LocalDateTime.now());
+        String normalizedPlatform = normalizePlatform(platform);
+        validateHarvestRequest(url, startTime, endTime, normalizedPlatform);
 
-        // 检查是否已存在（秒传去重）
+        Material material = buildMaterial(url, normalizedPlatform);
         Material existing = materialMapper.selectOne(new LambdaQueryWrapper<Material>()
                 .eq(Material::getMd5, material.getMd5()));
         if (existing != null) {
             material = existing;
+            material.setStatus(1);
+            material.setUpdateTime(LocalDateTime.now());
+            materialMapper.updateById(material);
         } else {
             materialMapper.insert(material);
         }
 
-        // 2. 创建 Clip
         Clip clip = new Clip();
         clip.setMaterialId(material.getId());
         clip.setStartTime(BigDecimal.valueOf(startTime));
         clip.setEndTime(BigDecimal.valueOf(endTime));
-        clip.setStatus(0); // 待处理
+        clip.setStatus(1);
         clip.setCreateTime(LocalDateTime.now());
         clipMapper.insert(clip);
 
         log.info("Harvest clip created: clipId={}, materialId={}, url={}, time=[{}-{}]",
                 clip.getId(), material.getId(), url, startTime, endTime);
 
-        // 3. 异步触发下载 (TODO: 调用 Python Agent gRPC)
-        triggerAsyncDownload(clip.getId(), url, startTime, endTime);
-
+        dispatchHarvestJob(clip.getId(), material.getId(), url, startTime, endTime);
         return toVO(clip);
     }
 
-    /**
-     * 查询切片的处理状态
-     */
     public ClipVO getStatus(Long clipId) {
         Clip clip = clipMapper.selectById(clipId);
         if (clip == null) {
@@ -131,90 +118,110 @@ public class ClipService {
         return toVO(clip);
     }
 
-    /**
-     * 异步触发下载（使用 yt-dlp/ffmpeg 命令行，后续可切 gRPC）
-     *
-     * TODO: 新建 harvester.proto + HarvesterGrpcClient，通过 gRPC
-     *       调用 Python Agent 的 harvester 服务，避免 Runtime.exec()。
-     *       当前方案使用 ProcessBuilder 以保证跨平台兼容性。
-     */
-    private void triggerAsyncDownload(Long clipId, String url, Double startTime, Double endTime) {
-        new Thread(() -> {
-            Clip clip = null;
-            try {
-                clip = clipMapper.selectById(clipId);
-                clip.setStatus(1); // 下载中
-                clipMapper.updateById(clip);
-
-                // 构建命令行：python harvester.py --clip-id <id> --url <url> --start <t> --end <t>
-                ProcessBuilder pb = new ProcessBuilder(
-                        "python",
-                        "ai-agent/services/harvester.py",
-                        "--clip-id", String.valueOf(clipId),
-                        "--url", url,
-                        "--start", String.format("%.2f", startTime),
-                        "--end", String.format("%.2f", endTime)
-                );
-                pb.redirectErrorStream(true);
-                Process process = pb.start();
-
-                // 读取输出以便调试
-                String output = new String(process.getInputStream().readAllBytes());
-                int exitCode = process.waitFor();
-
-                if (exitCode == 0) {
-                    clip.setStatus(3); // 已完成
-                    log.info("Harvest download completed: clipId={}", clipId);
-                } else {
-                    clip.setStatus(4); // 失败
-                    log.error("Harvest download failed: clipId={}, exitCode={}, output={}",
-                            clipId, exitCode, output.substring(0, Math.min(500, output.length())));
-                }
-                clipMapper.updateById(clip);
-            } catch (Exception e) {
-                log.error("Async download failed: clipId={}", clipId, e);
-                if (clip != null) {
-                    clip.setStatus(4);
-                    clipMapper.updateById(clip);
-                }
-            }
-        }, "harvest-clip-" + clipId).start();
-    }
-
-    /**
-     * Python Agent 回调：更新切片状态和存储路径
-     */
     public void updateStatus(Long clipId, int status, String storagePath) {
         Clip clip = clipMapper.selectById(clipId);
-        if (clip != null) {
-            clip.setStatus(status);
-            clipMapper.updateById(clip);
+        if (clip == null) {
+            return;
+        }
 
-            // 同时更新 Material 的 storagePath
+        clip.setStatus(status);
+        clipMapper.updateById(clip);
+
+        Material material = materialMapper.selectById(clip.getMaterialId());
+        if (material != null) {
             if (storagePath != null && !storagePath.isEmpty()) {
-                Material material = materialMapper.selectById(clip.getMaterialId());
-                if (material != null && material.getStoragePath() == null) {
-                    material.setStoragePath(storagePath);
-                    material.setStatus(status == 3 ? 2 : 4); // 已完成 → 转录中, 失败 → 失败
-                    material.setUpdateTime(LocalDateTime.now());
-                    materialMapper.updateById(material);
-                }
+                material.setStoragePath(storagePath);
             }
-            log.info("Clip status updated: clipId={}, status={}", clipId, status);
+            material.setStatus(status == 3 ? 2 : 4);
+            material.setUpdateTime(LocalDateTime.now());
+            materialMapper.updateById(material);
+        }
+
+        log.info("Clip status updated: clipId={}, status={}", clipId, status);
+    }
+
+    private Material buildMaterial(String url, String platform) {
+        Material material = new Material();
+        material.setMd5(DigestUtils.md5Hex(url));
+        material.setTitle("Harvested from " + platform);
+        material.setType("video");
+        material.setSourceUrl(url);
+        material.setStatus(1);
+        material.setCreateTime(LocalDateTime.now());
+        material.setUpdateTime(LocalDateTime.now());
+        return material;
+    }
+
+    private void dispatchHarvestJob(Long clipId, Long materialId, String url, Double startTime, Double endTime) {
+        Thread dispatcherThread = new Thread(() -> {
+            try {
+                RestClient.create(aiAgentBaseUrl)
+                        .post()
+                        .uri("/api/harvester/jobs")
+                        .body(new HarvestDispatchRequest(clipId, url, startTime, endTime))
+                        .retrieve()
+                        .toBodilessEntity();
+
+                log.info("Harvest job dispatched to AI Agent: clipId={}, materialId={}, baseUrl={}",
+                        clipId, materialId, aiAgentBaseUrl);
+            } catch (Exception e) {
+                markDispatchFailed(clipId, materialId, e);
+            }
+        }, "harvest-dispatch-" + clipId);
+        dispatcherThread.setDaemon(true);
+        dispatcherThread.start();
+    }
+
+    private void validateHarvestRequest(String url, Double startTime, Double endTime, String platform) {
+        if (!SUPPORTED_PLATFORMS.contains(platform)) {
+            throw new IllegalArgumentException("unsupported platform: " + platform);
+        }
+        if (url == null || url.isBlank()) {
+            throw new IllegalArgumentException("url must not be blank");
+        }
+        if (startTime == null || endTime == null) {
+            throw new IllegalArgumentException("startTime and endTime are required");
+        }
+        if (startTime < 0 || endTime <= startTime) {
+            throw new IllegalArgumentException("startTime must be >= 0 and endTime must be greater than startTime");
         }
     }
 
-    private ClipVO toVO(Clip c) {
+    private String normalizePlatform(String platform) {
+        return platform == null ? "" : platform.trim().toLowerCase();
+    }
+
+    private void markDispatchFailed(Long clipId, Long materialId, Exception e) {
+        log.error("Failed to dispatch harvest job: clipId={}, materialId={}", clipId, materialId, e);
+
+        Clip clip = clipMapper.selectById(clipId);
+        if (clip != null) {
+            clip.setStatus(4);
+            clipMapper.updateById(clip);
+        }
+
+        Material material = materialMapper.selectById(materialId);
+        if (material != null) {
+            material.setStatus(4);
+            material.setUpdateTime(LocalDateTime.now());
+            materialMapper.updateById(material);
+        }
+    }
+
+    private ClipVO toVO(Clip clip) {
         return ClipVO.builder()
-                .id(c.getId())
-                .materialId(c.getMaterialId())
-                .startTime(c.getStartTime())
-                .endTime(c.getEndTime())
-                .content(c.getContent())
-                .translation(c.getTranslation())
-                .vectorId(c.getVectorId())
-                .status(c.getStatus())
-                .createTime(c.getCreateTime())
+                .id(clip.getId())
+                .materialId(clip.getMaterialId())
+                .startTime(clip.getStartTime())
+                .endTime(clip.getEndTime())
+                .content(clip.getContent())
+                .translation(clip.getTranslation())
+                .vectorId(clip.getVectorId())
+                .status(clip.getStatus())
+                .createTime(clip.getCreateTime())
                 .build();
+    }
+
+    private record HarvestDispatchRequest(Long clipId, String url, Double startTime, Double endTime) {
     }
 }

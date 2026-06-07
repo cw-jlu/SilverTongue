@@ -154,11 +154,65 @@ class QwenOmniProvider(ModelProvider):
         **kwargs,
     ) -> Iterator[ModelResponse]:
         """
-        For voice-full models, streaming is complex (interleaved text + audio).
-        Fall back to non-streaming and yield the full response as one chunk.
+        Stream text and audio.
         """
-        resp = self.chat(messages, audio_data, **kwargs)
-        yield resp
+        client = self._get_client()
+        if client is None:
+            yield ModelResponse(text="[ERROR] DashScope client not available", finish_reason="error")
+            return
+
+        try:
+            api_messages = []
+            for msg in messages:
+                if msg["role"] == "user" and msg is messages[-1] and audio_data:
+                    api_messages.append({
+                        "role": "user",
+                        "content": self._build_audio_content(msg["content"], audio_data),
+                    })
+                else:
+                    api_messages.append(msg)
+
+            extra_params = {}
+            modalities = kwargs.get("modalities", ["text", "audio"])
+            extra_params["modalities"] = modalities
+            audio_params = kwargs.get("audio", {"voice": "Cherry", "format": "wav"})
+            extra_params["audio"] = audio_params
+
+            resp_stream = client.chat.completions.create(
+                model=self.model_name or "qwen2.5-omni",
+                messages=api_messages,
+                temperature=kwargs.get("temperature", 0.7),
+                max_tokens=kwargs.get("max_tokens", self.config.max_tokens),
+                stream=True,
+                stream_options={"include_usage": True},
+                **extra_params,
+            )
+
+            for chunk in resp_stream:
+                if not chunk.choices:
+                    continue
+                choice = chunk.choices[0]
+                text_delta = ""
+                if choice.delta and hasattr(choice.delta, "content") and choice.delta.content:
+                    text_delta = choice.delta.content
+
+                audio_bytes = b""
+                if choice.delta and hasattr(choice.delta, "audio") and choice.delta.audio:
+                    audio_info = choice.delta.audio
+                    if isinstance(audio_info, dict) and "data" in audio_info:
+                        audio_bytes = base64.b64decode(audio_info["data"])
+
+                yield ModelResponse(
+                    text=text_delta,
+                    audio_data=audio_bytes,
+                    finish_reason=choice.finish_reason or "",
+                    usage={},
+                    raw=chunk,
+                )
+
+        except Exception as e:
+            logger.error(f"[{self.name}] stream_chat error: {e}")
+            yield ModelResponse(text=f"[ERROR] {e}", finish_reason="error")
 
     def health_check(self) -> bool:
         client = self._get_client()

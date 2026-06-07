@@ -125,11 +125,28 @@ class AgentServiceServicer(agent_pb2_grpc.AgentServiceServicer):
         audio_buffer = bytearray()
         session_id = ""
 
+        last_audio_time = time.time()
+        silence_threshold = 1.5
+
         for request in request_iterator:
             session_id = request.session_id
-            audio_buffer.extend(request.audio_chunk)
+            audio_chunk = request.audio_chunk
+            audio_buffer.extend(audio_chunk)
 
-            if not request.is_final_chunk:
+            # Simple VAD (Root Mean Square energy approximation)
+            energy = sum(abs(b - 128) for b in audio_chunk) / (len(audio_chunk) or 1) if audio_chunk else 0
+            
+            if energy > 10:  # User is speaking
+                last_audio_time = time.time()
+
+            silence_duration = time.time() - last_audio_time
+
+            is_final = request.is_final_chunk
+            if not is_final and silence_duration > silence_threshold:
+                logger.info(f"Silence threshold exceeded ({silence_duration:.2f}s > {silence_threshold}s), forcing turn.")
+                is_final = True
+
+            if not is_final:
                 continue
 
             # ---- Final chunk received — process the complete utterance ----
