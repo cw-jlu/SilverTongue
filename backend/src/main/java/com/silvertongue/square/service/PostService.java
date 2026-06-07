@@ -61,7 +61,7 @@ public class PostService {
                 .content(post.getContent())
                 .nickname(user != null ? user.getNickname() : "unknown")
                 .build();
-        esTemplate.save(doc);
+        savePostDocument(doc);
 
         return toVO(post, userId);
     }
@@ -138,7 +138,7 @@ public class PostService {
                 .content(post.getContent())
                 .nickname(user != null ? user.getNickname() : "unknown")
                 .build();
-        esTemplate.save(doc);
+        savePostDocument(doc);
 
         return toVO(post, userId);
     }
@@ -160,7 +160,7 @@ public class PostService {
                 .eq(Comment::getPostId, postId));
         postMapper.deleteById(postId);
         // 移除 ES 文档
-        esTemplate.delete(String.valueOf(postId), PostDocument.class);
+        deletePostDocument(postId);
     }
 
     /**
@@ -203,7 +203,10 @@ public class PostService {
     public List<PostVO> search(String keyword, int page, int size) {
         Criteria criteria = new Criteria("content").matches(keyword);
         var query = new CriteriaQuery(criteria).setPageable(org.springframework.data.domain.PageRequest.of(page - 1, size));
-        var searchHits = esTemplate.search(query, PostDocument.class);
+        var searchHits = searchPostDocuments(query);
+        if (searchHits == null) {
+            return List.of();
+        }
 
         List<Long> postIds = searchHits.getSearchHits().stream()
                 .map(h -> h.getContent().getPostId())
@@ -246,5 +249,30 @@ public class PostService {
                 .content(comment.getContent())
                 .createTime(comment.getCreateTime())
                 .build();
+    }
+
+    private void savePostDocument(PostDocument doc) {
+        try {
+            esTemplate.save(doc);
+        } catch (Exception e) {
+            log.warn("Failed to sync post {} to Elasticsearch, continuing without index update", doc.getPostId(), e);
+        }
+    }
+
+    private void deletePostDocument(Long postId) {
+        try {
+            esTemplate.delete(String.valueOf(postId), PostDocument.class);
+        } catch (Exception e) {
+            log.warn("Failed to delete post {} from Elasticsearch, continuing without index cleanup", postId, e);
+        }
+    }
+
+    private org.springframework.data.elasticsearch.core.SearchHits<PostDocument> searchPostDocuments(org.springframework.data.elasticsearch.core.query.Query query) {
+        try {
+            return esTemplate.search(query, PostDocument.class);
+        } catch (Exception e) {
+            log.warn("Elasticsearch search failed, returning empty result", e);
+            return null;
+        }
     }
 }
