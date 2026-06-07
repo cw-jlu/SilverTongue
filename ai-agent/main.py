@@ -8,14 +8,26 @@ STT/TTS services, Kafka audio pipeline, and ES store.
 import asyncio
 import os
 import grpc
-from fastapi import FastAPI
+from fastapi import FastAPI, status
 from prometheus_client import make_asgi_app
 import uvicorn
 from loguru import logger
 import redis.asyncio as redis
 from grpc_health.v1 import health_pb2, health_pb2_grpc
+from pydantic import BaseModel, ConfigDict, Field
 
 app = FastAPI(title="SilverTongue AI Agent")
+_harvester_tasks = set()
+
+
+class HarvesterJobRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    clip_id: int = Field(alias="clipId")
+    url: str
+    start_time: float = Field(alias="startTime")
+    end_time: float = Field(alias="endTime")
+
 
 # ==========================================
 # 1. Prometheus Metrics Configuration
@@ -60,6 +72,44 @@ async def refresh_providers():
     if _model_router:
         _model_router.refresh()
     return {"status": "refreshed"}
+
+
+async def _run_harvester_job(job: HarvesterJobRequest):
+    from services.harvester import process_clip
+
+    logger.info(
+        "Running harvester job clip_id={}, url={}, start_time={}, end_time={}",
+        job.clip_id,
+        job.url,
+        job.start_time,
+        job.end_time,
+    )
+    await asyncio.to_thread(
+        process_clip,
+        job.clip_id,
+        job.url,
+        job.start_time,
+        job.end_time,
+    )
+
+
+def _on_harvester_task_done(task: asyncio.Task):
+    _harvester_tasks.discard(task)
+    try:
+        task.result()
+    except Exception as exc:
+        logger.exception("Harvester job failed: {}", exc)
+
+
+@app.post("/api/harvester/jobs", status_code=status.HTTP_202_ACCEPTED)
+async def create_harvester_job(payload: HarvesterJobRequest):
+    task = asyncio.create_task(_run_harvester_job(payload))
+    _harvester_tasks.add(task)
+    task.add_done_callback(_on_harvester_task_done)
+    return {
+        "status": "accepted",
+        "clipId": payload.clip_id,
+    }
 
 # ==========================================
 # 4. gRPC Health Check Servicer
