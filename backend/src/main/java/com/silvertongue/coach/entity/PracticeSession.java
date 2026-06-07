@@ -1,6 +1,7 @@
 package com.silvertongue.coach.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -41,5 +42,6 @@ public class PracticeSession {
     private LocalDateTime updateTime;
     
     /** 课后总结报告 (JSON string) */
+    @TableField(exist = false)
     private String reportData;
 }

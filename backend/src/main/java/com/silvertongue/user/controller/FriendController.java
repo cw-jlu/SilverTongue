@@ -53,6 +53,14 @@ public class FriendController {
     /**
      * 好友列表
      */
+    @GetMapping
+    public ApiResult<List<FriendVO>> listDefault(@AuthenticationPrincipal AuthenticatedUser currentUser) {
+        return ApiResult.success(friendshipService.listFriends(currentUser.getUserId()));
+    }
+
+    /**
+     * 好友列表
+     */
     @GetMapping("/list")
     public ApiResult<List<FriendVO>> list(@AuthenticationPrincipal AuthenticatedUser currentUser) {
         return ApiResult.success(friendshipService.listFriends(currentUser.getUserId()));

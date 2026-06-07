@@ -128,6 +128,34 @@ class PostControllerIntegrationTest extends AbstractWebMvcIntegrationTest {
                 .andExpect(jsonPath("$.message").value("only the author can delete this post"));
     }
 
+    @Test
+    void searchShouldAcceptKeywordAlias() throws Exception {
+        PostVO response = PostVO.builder()
+                .id(1L)
+                .content("searchable")
+                .createTime(LocalDateTime.now())
+                .build();
+        when(postService.search("spoken english", 1, 20)).thenReturn(List.of(response));
+
+        mockMvc.perform(get("/api/post/search")
+                        .with(bearerToken())
+                        .param("keyword", "spoken english"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].id").value("1"))
+                .andExpect(jsonPath("$.data[0].content").value("searchable"));
+
+        verify(postService).search("spoken english", 1, 20);
+    }
+
+    @Test
+    void searchShouldRejectBlankKeyword() throws Exception {
+        mockMvc.perform(get("/api/post/search")
+                        .with(bearerToken()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("search keyword must not be blank"));
+    }
+
     @SpringBootConfiguration
     @EnableAutoConfiguration
     @Import({

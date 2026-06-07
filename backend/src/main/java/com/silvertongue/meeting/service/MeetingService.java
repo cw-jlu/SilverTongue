@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -124,7 +125,7 @@ public class MeetingService {
             participant.setRoomId(roomId);
             participant.setUserId(userId);
             participant.setJoinTime(LocalDateTime.now());
-            participant.setRole(room.getCreatorId().equals(userId) ? 1 : 0);
+            participant.setRole(Objects.equals(room.getCreatorId(), userId) ? 1 : 0);
             participantMapper.insert(participant);
         }
 
