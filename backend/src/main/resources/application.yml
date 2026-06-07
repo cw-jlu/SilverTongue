@@ -5,6 +5,12 @@ spring:
   application:
     name: silvertongue-backend
 
+  # ===== Multipart 上传限制 =====
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
   # ===== MySQL =====
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:silvertongue}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
