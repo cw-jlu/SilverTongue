@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff, MessageCircle, Sparkles } from 'lucide-react';
 import api from '../api/client';
+import { getWeChatOAuthUrl } from '../config/wechat';
 
 const Pupil = ({
   size = 12,
@@ -644,7 +645,7 @@ export default function Login() {
           {/* 微信快速登录 */}
           <div style={{ marginTop: '16px' }}>
             <button
-              onClick={() => alert("微信开放平台接口配置中，请先使用账号密码登录！")}
+              onClick={() => { window.location.href = getWeChatOAuthUrl(); }}
               style={{
                 width: '100%',
                 height: '46px',
