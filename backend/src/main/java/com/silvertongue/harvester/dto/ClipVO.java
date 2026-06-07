@@ -16,11 +16,14 @@ public class ClipVO {
 
     private Long id;
     private Long materialId;
+    private String title;
     private BigDecimal startTime;
     private BigDecimal endTime;
     private String content;
     private String translation;
     private String vectorId;
+    private String sourceUrl;
+    private String audioPath;
     private Integer status;
     private LocalDateTime createTime;
 }

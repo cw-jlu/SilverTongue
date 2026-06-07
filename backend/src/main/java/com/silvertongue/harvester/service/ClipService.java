@@ -1,24 +1,35 @@
 package com.silvertongue.harvester.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.silvertongue.harvester.dto.ClipCreateRequest;
 import com.silvertongue.harvester.dto.ClipVO;
 import com.silvertongue.harvester.entity.Clip;
 import com.silvertongue.harvester.entity.Material;
 import com.silvertongue.harvester.mapper.ClipMapper;
 import com.silvertongue.harvester.mapper.MaterialMapper;
+import io.minio.GetPresignedObjectUrlArgs;
+import io.minio.MinioClient;
+import io.minio.http.Method;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestClient;
 
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -30,9 +41,14 @@ public class ClipService {
 
     private final ClipMapper clipMapper;
     private final MaterialMapper materialMapper;
+    private final ObjectMapper objectMapper;
+    private final MinioClient minioClient;
 
     @Value("${ai.agent.base-url:http://localhost:8089}")
     private String aiAgentBaseUrl;
+
+    @Value("${minio.buckets.materials:st-materials}")
+    private String materialsBucketName;
 
     @Transactional
     public ClipVO create(ClipCreateRequest request) {
@@ -118,6 +134,39 @@ public class ClipService {
         return toVO(clip);
     }
 
+    public String getPlaybackUrl(Long clipId) {
+        Clip clip = clipMapper.selectById(clipId);
+        if (clip == null) {
+            throw new IllegalArgumentException("clip not found");
+        }
+
+        Material material = materialMapper.selectById(clip.getMaterialId());
+        if (material == null) {
+            throw new IllegalArgumentException("material not found");
+        }
+
+        if (material.getStoragePath() != null && !material.getStoragePath().isBlank()) {
+            try {
+                return minioClient.getPresignedObjectUrl(
+                        GetPresignedObjectUrlArgs.builder()
+                                .method(Method.GET)
+                                .bucket(materialsBucketName)
+                                .object(material.getStoragePath())
+                                .expiry(1, TimeUnit.HOURS)
+                                .build()
+                );
+            } catch (Exception e) {
+                throw new IllegalStateException("failed to create playback url", e);
+            }
+        }
+
+        if (material.getSourceUrl() != null && !material.getSourceUrl().isBlank()) {
+            return material.getSourceUrl();
+        }
+
+        throw new IllegalStateException("clip media is not available");
+    }
+
     public void updateStatus(Long clipId, int status, String storagePath) {
         Clip clip = clipMapper.selectById(clipId);
         if (clip == null) {
@@ -146,6 +195,7 @@ public class ClipService {
         material.setTitle("Harvested from " + platform);
         material.setType("video");
         material.setSourceUrl(url);
+        material.setStoragePath("pending/" + material.getMd5());
         material.setStatus(1);
         material.setCreateTime(LocalDateTime.now());
         material.setUpdateTime(LocalDateTime.now());
@@ -155,12 +205,29 @@ public class ClipService {
     private void dispatchHarvestJob(Long clipId, Long materialId, String url, Double startTime, Double endTime) {
         Thread dispatcherThread = new Thread(() -> {
             try {
-                RestClient.create(aiAgentBaseUrl)
-                        .post()
-                        .uri("/api/harvester/jobs")
-                        .body(new HarvestDispatchRequest(clipId, url, startTime, endTime))
-                        .retrieve()
-                        .toBodilessEntity();
+                Map<String, Object> payload = Map.of(
+                        "clipId", clipId,
+                        "url", url,
+                        "startTime", startTime,
+                        "endTime", endTime
+                );
+                byte[] requestBody = toJson(payload).getBytes(StandardCharsets.UTF_8);
+                HttpURLConnection connection = (HttpURLConnection) new URL(aiAgentBaseUrl + "/api/harvester/jobs")
+                        .openConnection();
+                connection.setRequestMethod("POST");
+                connection.setDoOutput(true);
+                connection.setConnectTimeout(5000);
+                connection.setReadTimeout(10000);
+                connection.setRequestProperty("Content-Type", MediaType.APPLICATION_JSON_VALUE);
+                connection.setRequestProperty("Accept", MediaType.APPLICATION_JSON_VALUE);
+                connection.setFixedLengthStreamingMode(requestBody.length);
+                try (OutputStream outputStream = connection.getOutputStream()) {
+                    outputStream.write(requestBody);
+                }
+                int statusCode = connection.getResponseCode();
+                if (statusCode / 100 != 2) {
+                    throw new IllegalStateException("unexpected AI agent response: " + statusCode);
+                }
 
                 log.info("Harvest job dispatched to AI Agent: clipId={}, materialId={}, baseUrl={}",
                         clipId, materialId, aiAgentBaseUrl);
@@ -170,6 +237,10 @@ public class ClipService {
         }, "harvest-dispatch-" + clipId);
         dispatcherThread.setDaemon(true);
         dispatcherThread.start();
+    }
+
+    private String toJson(Map<String, Object> payload) throws JsonProcessingException {
+        return objectMapper.writeValueAsString(payload);
     }
 
     private void validateHarvestRequest(String url, Double startTime, Double endTime, String platform) {
@@ -209,19 +280,20 @@ public class ClipService {
     }
 
     private ClipVO toVO(Clip clip) {
+        Material material = materialMapper.selectById(clip.getMaterialId());
         return ClipVO.builder()
                 .id(clip.getId())
                 .materialId(clip.getMaterialId())
+                .title(material != null ? material.getTitle() : null)
                 .startTime(clip.getStartTime())
                 .endTime(clip.getEndTime())
                 .content(clip.getContent())
                 .translation(clip.getTranslation())
                 .vectorId(clip.getVectorId())
+                .sourceUrl(material != null ? material.getSourceUrl() : null)
+                .audioPath("/api/clips/" + clip.getId() + "/audio")
                 .status(clip.getStatus())
                 .createTime(clip.getCreateTime())
                 .build();
-    }
-
-    private record HarvestDispatchRequest(Long clipId, String url, Double startTime, Double endTime) {
     }
 }
