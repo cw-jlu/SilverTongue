@@ -2,7 +2,8 @@
 (function () {
   'use strict';
 
-  const BACKEND_URL = 'http://localhost:8080/api';
+  const APP_ORIGIN = 'http://localhost:3000';
+  const API_BASE_URL = `${APP_ORIGIN}/api`;
 
   // ─── 1. 页面检测 ───────────────────────────────
   function detectPlatform() {
@@ -149,7 +150,7 @@
 
     const token = await getToken();
     try {
-      const resp = await fetch(`${BACKEND_URL}/clips/harvest`, {
+      const resp = await fetch(`${API_BASE_URL}/clips/harvest`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -183,7 +184,7 @@
     const interval = setInterval(async () => {
       attempts++;
       try {
-        const resp = await fetch(`${BACKEND_URL}/clips/status/${clipId}`);
+        const resp = await fetch(`${API_BASE_URL}/clips/status/${clipId}`);
         const clip = await resp.json();
         // 后端返回 ClipVO: { id, materialId, status (0待处理/1下载中/3完成/4失败), ... }
         const status = clip.status;

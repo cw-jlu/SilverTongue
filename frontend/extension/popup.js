@@ -1,5 +1,6 @@
 /* SilverTongue Harvester — popup.js */
 document.addEventListener('DOMContentLoaded', () => {
+  const APP_ORIGIN = 'http://localhost:3000';
   const tokenInput = document.getElementById('token-input');
   const tokenStatus = document.getElementById('token-status');
 
@@ -26,6 +27,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('open-app').addEventListener('click', () => {
-    chrome.tabs.create({ url: 'http://localhost:3000' });
+    chrome.tabs.create({ url: APP_ORIGIN });
   });
 });
