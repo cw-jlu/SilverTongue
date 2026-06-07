@@ -39,17 +39,19 @@ public class SessionService {
         session.setTopic(topic);
         session.setContextFileUrl(request.getContextFileUrl());
         
+        String userLevel = request.getUserLevel() != null && !request.getUserLevel().isBlank() ? request.getUserLevel() : "B2";
+        session.setUserLevel(userLevel);
+        
         session.setStatus(0); // 进行中
         session.setCreateTime(now);
         session.setUpdateTime(now);
         sessionMapper.insert(session);
 
-        log.info("Session created: id={}, userId={}, type={}, mode={}, topic={}, contextFileUrl={}", 
-                 session.getId(), userId, request.getType(), request.getMode(), topic, request.getContextFileUrl());
+        log.info("Session created: id={}, userId={}, type={}, mode={}, topic={}, userLevel={}, contextFileUrl={}", 
+                 session.getId(), userId, request.getType(), request.getMode(), topic, userLevel, request.getContextFileUrl());
 
         // 调用 Python Agent 开启会话 (初始化 Redis 中的角色/场景等上下文)
         if ("ai_chat".equals(request.getType())) {
-            String userLevel = request.getUserLevel() != null && !request.getUserLevel().isBlank() ? request.getUserLevel() : "B2";
             agentGrpcClient.startSession(userId.toString(), session.getId().toString(), request.getMode(), userLevel, topic, request.getContextFileUrl());
         }
 
@@ -120,6 +122,7 @@ public class SessionService {
                 .mode(s.getMode())
                 .topic(s.getTopic())
                 .contextFileUrl(s.getContextFileUrl())
+                .userLevel(s.getUserLevel())
                 .status(s.getStatus())
                 .durationSeconds(s.getDurationSeconds())
                 .createTime(s.getCreateTime())
