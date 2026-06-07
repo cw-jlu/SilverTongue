@@ -1,115 +1,110 @@
-# 🗣️ SilverTongue (灵舌) - AI 驱动的全链路英语口语学习生态
+# SilverTongue (灵舌) - AI 驱动的全链路英语口语学习生态
 
-> **采集即练习，练习即进步** — 打通从语料输入到口语输出的完整学习闭环。
+[![Spring Boot](https://img.shields.io/badge/Backend-Spring%20Boot%203.x-brightgreen)](https://spring.io/projects/spring-boot)
+[![React](https://img.shields.io/badge/Frontend-React%2018-blue)](https://reactjs.org/)
+[![Python](https://img.shields.io/badge/AI-Python%203.10-yellow)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-purple)](LICENSE)
 
----
-
-## 项目简介
-
-SilverTongue 是一款融合了端到端多模态语音 AI 技术的英语口语学习平台。系统通过浏览器插件一键采集 YouTube / Netflix 语料，结合 Qwen2.5-Omni 端到端语音大模型进行 AI 实时对练，并提供音素级发音评测和中式英语检测，帮助用户高效提升英语口语能力。
-
-## 🎬 Demo 视频
-
-> 📌 **TODO**: 上传 Demo 至 B站 / 百度网盘，并在此放入链接。
+SilverTongue 是一款旨在打通 **“采集即练习，练习即进步”** 闭环的英语口语学习平台。它结合了浏览器插件的便捷采集、影子跟读的科学训练、以及基于端到端大模型（Qwen2.5-Omni）的即时对话反馈。
 
 ---
 
-## 技术架构
+## 📺 演示视频 (Demo Video)
 
-本项目采用 **gRPC 三服务架构**：
-
-| 服务 | 技术栈 | 端口 | 说明 |
-| :--- | :--- | :--- | :--- |
-| **Spring Boot 业务服务** | Java 17 / Spring Boot 3 / MyBatis-Plus | 8080 | 用户管理、社区、练习、SRS |
-| **Python Agent 智能服务** | Python 3.11 / FastAPI / LangGraph | 50051 (gRPC) | AI 对练、发音评测、RAG |
-| **统一监控服务** | Prometheus / Grafana | 9090 / 3001 | 指标采集、可视化面板 |
-
-服务间通过 **gRPC** 高效通信（支持双向音频流传输）。
-
-```
-┌─────────────┐    HTTP/WS     ┌──────────────────┐    gRPC     ┌──────────────────┐
-│   Frontend   │ ──────────── │  Spring Boot     │ ────────── │  Python Agent    │
-│  (React/Vite)│              │  (backend/)      │            │  (ai-agent/)     │
-└─────────────┘              └──────────────────┘            └──────────────────┘
-                                    │                               │
-                               ┌────┴────┐                    ┌────┴────┐
-                               │ MySQL   │                    │ Milvus  │
-                               │ Redis   │                    │ MFA     │
-                               │ MinIO   │                    │ Qwen    │
-                               │ ES      │                    └─────────┘
-                               └─────────┘
-```
+[![SilverTongue Demo](https://img.youtube.com/vi/YOUR_VIDEO_ID/0.jpg)](https://www.youtube.com/watch?v=YOUR_VIDEO_ID)
+*点击上方图片查看完整产品演示视频 (待替换为实际链接)*
 
 ---
 
-## 项目结构
+## ✨ 核心特性 (Key Features)
 
-```
-SilverTongue/
-├── docs/               # 设计文档 (PRD, 数据库设计, 开发规范)
-├── proto/              # gRPC Protobuf 协议定义 (双端共享)
-├── backend/            # Spring Boot 业务服务
-├── ai-agent/           # Python Agent 智能服务
-├── monitoring/         # Prometheus + Grafana 监控配置
-├── frontend/           # React + Vite 前端
-└── docker-compose.yml  # 一键启动完整开发环境
-```
+- 🎙️ **Echo 影子跟读**：实时波形对比，支持音素级发音纠错与 MFA (Montreal Forced Aligner) 精准对齐。
+- 🤖 **AI 陪练 (The Coach)**：接入 Qwen2.5-Omni 端到端语音模型，实现首字节延迟 <1.2s 的极速全双工语音对练。
+- 🌐 **全域采集 (The Harvester)**：一键截取 YouTube/Netflix 语料片段，自动转录、翻译并同步至个人库。
+- 🧠 **智能润色 (The Polisher)**：中式英语 (Chinglish) 实时检测，并提供地道表达替换建议。
+- 📊 **1000 小时追踪**：可视化热力图追踪“输入”与“输出”时长，科学量化进步。
+- 💬 **真人互动大厅**：基于 WebRTC 的真人 1v1 语音对练与主题研讨。
 
 ---
 
-## 快速启动
+## 🏗️ 技术架构 (Architecture)
 
-### 环境要求
+### 后端 (Backend) - Java Spring Boot
+- **核心框架**: Spring Boot 3.x, Spring Security (JWT)
+- **数据库**: MySQL 8.0, MyBatis Plus
+- **存储**: MinIO (对象存储), Redis (缓存/分布式锁)
+- **通信**: gRPC (与 AI Agent 通信), WebSocket (实时消息/信令)
+- **搜索**: Elasticsearch (UGC 内容检索)
+
+### 前端 (Frontend) - React
+- **核心框架**: React 18, Vite
+- **状态管理**: Hooks / Context API
+- **音频处理**: Wavesurfer.js (波形展示), Web Audio API
+- **实时通信**: WebRTC (真人通话)
+
+### AI Agent - Python
+- **模型推理**: LangGraph (对话流控), Qwen2.5-Omni (端到端语音大模型)
+- **音频分析**: Montreal Forced Aligner (MFA), Azure Speech SDK
+- **Web 框架**: FastAPI / gRPC Server
+
+---
+
+## 🚀 快速开始 (Quick Start)
+
+### 1. 环境依赖
 - JDK 17+
-- Python 3.11+
 - Node.js 18+
+- Python 3.10+
 - Docker & Docker Compose
+- NVIDIA GPU (可选，用于本地运行 Omni 模型)
 
-### 一键启动
+### 2. 部署步骤
+
+#### 克隆仓库
 ```bash
-docker compose up -d
+git clone https://github.com/your-username/SilverTongue.git
+cd SilverTongue
 ```
 
-### 分服务启动
+#### 启动基础服务 (Docker)
 ```bash
-# 后端
-cd backend && mvn spring-boot:run
+docker-compose up -d mysql redis minio elasticsearch
+```
 
-# AI 服务
-cd ai-agent && pip install -r requirements.txt && python main.py
+#### 启动后端 (Spring Boot)
+1. 配置 `backend/src/main/resources/application.yml` 中的数据库和 MinIO 连接。
+2. 运行项目：
+```bash
+cd backend
+./mvnw spring-boot:run
+```
 
-# 前端
-cd frontend && npm install && npm run dev
+#### 启动 AI Agent (Python)
+```bash
+cd ai-agent
+python -m venv .venv
+source .venv/bin/activate  # Windows 使用 .venv\Scripts\activate
+pip install -r requirements.txt
+python main.py
+```
+
+#### 启动前端 (React)
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
 ---
 
-## 第三方开源组件引用
+## 📜 开源协议 (License)
 
-| 组件 | 版本 | 用途 |
-| :--- | :--- | :--- |
-| Spring Boot | 3.3.x | Java 后端框架 |
-| MyBatis-Plus | 3.5.x | ORM 持久层 |
-| FastAPI | 0.115.x | Python Web 框架 |
-| LangGraph | 0.3.x | AI Agent 对话状态图 |
-| Qwen2.5-Omni | 7B | 端到端多模态语音大模型 |
-| MFA (Montreal Forced Aligner) | 3.x | 音素级发音对齐 |
-| Milvus | 2.4.x | 向量数据库 (RAG 检索) |
-| React | 19.x | 前端 UI 框架 |
-| Vite | 6.x | 前端构建工具 |
-| Prometheus | 2.x | 指标采集 |
-| Grafana | 11.x | 监控可视化 |
+本项目采用 [MIT License](LICENSE) 开源。
 
 ---
 
-## 贡献指南
+## 🤝 贡献与反馈
 
-1. 从 `develop` 分支切出功能分支：`feature/A-xxx` 或 `feature/B-xxx`
-2. 完成单一功能后提交 PR 至 `develop`
-3. PR 描述需包含：标题、功能描述、实现思路、测试方式
-
----
-
-## License
-
-MIT License
+如果您有任何建议或发现了 Bug，欢迎提交 Issue 或 Pull Request。
+- **项目负责人**: [Evann](mailto:evann@example.com)
+- **官方文档**: [Docs](./docs)
