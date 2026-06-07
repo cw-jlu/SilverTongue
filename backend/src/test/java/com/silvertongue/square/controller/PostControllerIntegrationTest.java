@@ -62,8 +62,8 @@ class PostControllerIntegrationTest extends AbstractWebMvcIntegrationTest {
                                 {"content":"hello"}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.id").value(100))
-                .andExpect(jsonPath("$.data.userId").value(7))
+                .andExpect(jsonPath("$.data.id").value("100"))
+                .andExpect(jsonPath("$.data.userId").value("7"))
                 .andExpect(jsonPath("$.data.content").value("hello"));
 
         verify(postService).create(eq(7L), any());
@@ -132,6 +132,7 @@ class PostControllerIntegrationTest extends AbstractWebMvcIntegrationTest {
     @EnableAutoConfiguration
     @Import({
             PostController.class,
+            com.silvertongue.config.JacksonConfig.class,
             com.silvertongue.config.SecurityConfig.class,
             com.silvertongue.common.GlobalExceptionHandler.class,
             com.silvertongue.security.JwtAuthenticationFilter.class

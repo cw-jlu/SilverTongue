@@ -97,7 +97,7 @@ class UserControllerIntegrationTest extends AbstractWebMvcIntegrationTest {
         mockMvc.perform(get("/api/user/me").with(bearerToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
-                .andExpect(jsonPath("$.data.id").value(7))
+                .andExpect(jsonPath("$.data.id").value("7"))
                 .andExpect(jsonPath("$.data.username").value("alice"));
 
         verify(userService).getProfile(7L);
@@ -123,6 +123,7 @@ class UserControllerIntegrationTest extends AbstractWebMvcIntegrationTest {
     @EnableAutoConfiguration
     @Import({
             UserController.class,
+            com.silvertongue.config.JacksonConfig.class,
             com.silvertongue.config.SecurityConfig.class,
             com.silvertongue.common.GlobalExceptionHandler.class,
             com.silvertongue.security.JwtAuthenticationFilter.class

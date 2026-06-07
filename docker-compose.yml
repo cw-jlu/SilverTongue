@@ -1,13 +1,12 @@
 services:
-  # ==================== 基础设施层 ====================
   mysql:
     image: mysql:8.0
     container_name: st-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: silvertongue_root
-      MYSQL_DATABASE: silvertongue
-      MYSQL_USER: st_user
-      MYSQL_PASSWORD: st_pass_2026
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-silvertongue_root}
+      MYSQL_DATABASE: ${MYSQL_DB:-silvertongue}
+      MYSQL_USER: ${MYSQL_USER:-st_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-st_pass_2026}
     ports:
       - "3306:3306"
     volumes:
@@ -36,11 +35,11 @@ services:
     container_name: st-minio
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: silvertongue
-      MINIO_ROOT_PASSWORD: silvertongue_minio
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-silvertongue}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-silvertongue_minio}
     ports:
-      - "9000:9000"   # API
-      - "9001:9001"   # Console
+      - "9000:9000"
+      - "9001:9001"
     volumes:
       - minio_data:/data
 
@@ -76,7 +75,6 @@ services:
       timeout: 10s
       retries: 5
 
-  # ==================== 业务服务层 ====================
   backend:
     build:
       context: .
@@ -87,20 +85,20 @@ services:
     environment:
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
-      MYSQL_DB: silvertongue
-      MYSQL_USER: st_user
-      MYSQL_PASSWORD: st_pass_2026
+      MYSQL_DB: ${MYSQL_DB:-silvertongue}
+      MYSQL_USER: ${MYSQL_USER:-st_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-st_pass_2026}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       ES_URIS: http://elasticsearch:9200
       MINIO_ENDPOINT: http://minio:9000
-      MINIO_ACCESS_KEY: silvertongue
-      MINIO_SECRET_KEY: silvertongue_minio
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-silvertongue}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-silvertongue_minio}
       GRPC_AGENT_HOST: ai-agent
       GRPC_AGENT_PORT: 50051
-      JWT_SECRET: SilverTongue_JWT_Secret_Key_2026_Very_Long_And_Secure
-      WECHAT_APP_ID: wx_demo_id
-      WECHAT_APP_SECRET: wx_demo_secret
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-.env}
+      WECHAT_APP_ID: ${WECHAT_APP_ID:-wx_demo_id}
+      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-wx_demo_secret}
     depends_on:
       mysql:
         condition: service_healthy
@@ -113,33 +111,29 @@ services:
       dockerfile: Dockerfile
     container_name: st-ai-agent
     ports:
-      - "50051:50051"   # gRPC
-      - "8089:8089"     # FastAPI health/metrics
+      - "50051:50051"
+      - "8089:8089"
     environment:
       REDIS_URL: redis://redis:6379/3
       MILVUS_HOST: milvus-standalone
       MILVUS_PORT: 19530
       ES_URIS: http://elasticsearch:9200
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      # ---- Model Router (多模型路由) ----
-      # 方式 A: 逐个配置
-      LLM_API_KEY: ""                          # OpenAI / 通用 text-only
-      LLM_BASE_URL: "https://api.openai.com/v1"
-      LLM_MODEL: "gpt-4o"
-      QWEN_OMNI_API_KEY: ""                    # Qwen2.5-Omni (voice-native)
-      QWEN_OMNI_ENDPOINT: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-      QWEN_OMNI_MODEL: "qwen2.5-omni"
-      DEEPSEEK_API_KEY: "sk-46a31dc5807046e0bdef7d369365d724" # DeepSeek (text-only, cheap)
-      DEEPSEEK_MODEL: "deepseek-chat"
-      LOCAL_MODEL_ENDPOINT: "http://localhost:11434"  # Ollama / vLLM
-      LOCAL_MODEL_NAME: "qwen2.5:72b"
-      LOCAL_MIN_VRAM_GB: "200"
-      # ---- STT / TTS ----
-      STT_MODEL_SIZE: "large-v3"               # faster-whisper 模型尺寸
-      STT_API_KEY: ""                          # 远端 Whisper API key (fallback)
-      TTS_VOICE: "en-US-AriaNeural"            # edge-tts 默认音色
-      # ---- MFA ----
-      MFA_ENABLED: "false"
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o}
+      QWEN_OMNI_API_KEY: ${QWEN_OMNI_API_KEY:-}
+      QWEN_OMNI_ENDPOINT: ${QWEN_OMNI_ENDPOINT:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      QWEN_OMNI_MODEL: ${QWEN_OMNI_MODEL:-qwen2.5-omni}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-chat}
+      LOCAL_MODEL_ENDPOINT: ${LOCAL_MODEL_ENDPOINT:-http://localhost:11434}
+      LOCAL_MODEL_NAME: ${LOCAL_MODEL_NAME:-qwen2.5:72b}
+      LOCAL_MIN_VRAM_GB: ${LOCAL_MIN_VRAM_GB:-200}
+      STT_MODEL_SIZE: ${STT_MODEL_SIZE:-large-v3}
+      STT_API_KEY: ${STT_API_KEY:-}
+      TTS_VOICE: ${TTS_VOICE:-en-US-AriaNeural}
+      MFA_ENABLED: ${MFA_ENABLED:-false}
     depends_on:
       - redis
       - kafka
@@ -154,7 +148,6 @@ services:
     depends_on:
       - backend
 
-  # ==================== 监控层 ====================
   prometheus:
     image: prom/prometheus:v2.53.0
     container_name: st-prometheus
@@ -170,8 +163,8 @@ services:
     image: grafana/grafana:11.1.0
     container_name: st-grafana
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: silvertongue
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-silvertongue}
     ports:
       - "3001:3000"
     volumes:

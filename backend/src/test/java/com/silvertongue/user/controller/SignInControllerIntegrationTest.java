@@ -75,6 +75,7 @@ class SignInControllerIntegrationTest extends AbstractWebMvcIntegrationTest {
     @EnableAutoConfiguration
     @Import({
             SignInController.class,
+            com.silvertongue.config.JacksonConfig.class,
             com.silvertongue.config.SecurityConfig.class,
             com.silvertongue.common.GlobalExceptionHandler.class,
             com.silvertongue.security.JwtAuthenticationFilter.class

@@ -44,4 +44,6 @@ docker-compose.override.yml
 
 # ===== Environment =====
 .env
+.env.*
 *.env.local
+!.env.example
