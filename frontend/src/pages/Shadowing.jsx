@@ -295,7 +295,9 @@ export default function Shadowing() {
 
     try {
       const r = await api.post('/shadowing/record', fd);
-      setAssessmentResult(r.assessment || r.data?.assessment || r);
+      // Backend 返回 ApiResult<{ clipId, audioUrl, targetText, assessment }>
+      const payload = r.data || r;
+      setAssessmentResult(payload.assessment || payload);
     } catch (err) {
       console.error('评估失败:', err);
     }
