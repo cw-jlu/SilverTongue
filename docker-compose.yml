@@ -134,6 +134,8 @@ services:
       STT_API_KEY: ${STT_API_KEY:-}
       TTS_VOICE: ${TTS_VOICE:-en-US-AriaNeural}
       MFA_ENABLED: ${MFA_ENABLED:-false}
+      AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
+      AZURE_SPEECH_REGION: ${AZURE_SPEECH_REGION:-eastasia}
     depends_on:
       - redis
       - kafka
