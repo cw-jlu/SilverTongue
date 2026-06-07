@@ -73,15 +73,9 @@ class TTSService:
         api_key = os.getenv("TTS_AI_API_KEY", "")
         if not api_key:
             return False
-        try:
-            from openai import OpenAI
-            base_url = os.getenv("TTS_AI_BASE_URL", "https://tts.ai/v1")
-            self._tts_ai_client = OpenAI(api_key=api_key, base_url=base_url)
-            logger.info(f"TTS: using tts.ai API at {base_url}")
-            return True
-        except Exception as e:
-            logger.warning(f"TTS: failed to init tts.ai client: {e}")
-            return False
+        base_url = os.getenv("TTS_AI_BASE_URL", "https://tts.ai/v1")
+        logger.info(f"TTS: using tts.ai API at {base_url}")
+        return True
 
     def _init_freetts(self) -> bool:
         if os.getenv("TTS_USE_FREETTS", "").lower() != "true":
@@ -168,17 +162,31 @@ class TTSService:
             return b""
 
     def _synthesize_tts_ai(self, text: str, voice: Optional[str]) -> bytes:
+        import requests
         voice = voice or os.getenv("TTS_AI_VOICE", "af_bella")
         model = os.getenv("TTS_AI_MODEL", "kokoro")
+        api_key = os.getenv("TTS_AI_API_KEY", "")
+        base_url = os.getenv("TTS_AI_BASE_URL", "https://tts.ai/v1")
+        url = f"{base_url.rstrip('/')}/audio/speech"
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": model,
+            "voice": voice,
+            "input": text
+        }
         try:
-            response = self._tts_ai_client.audio.speech.create(
-                model=model,
-                voice=voice,
-                input=text
-            )
-            return response.content
+            response = requests.post(url, json=payload, headers=headers)
+            if response.status_code == 200:
+                return response.content
+            else:
+                logger.error(f"TTS tts.ai error: {response.status_code} - {response.text}")
+                return b""
         except Exception as e:
-            logger.error(f"TTS tts.ai error: {e}")
+            logger.error(f"TTS tts.ai exception: {e}")
             return b""
 
     def _synthesize_freetts(self, text: str, voice: Optional[str]) -> bytes:
