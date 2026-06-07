@@ -35,7 +35,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/user/register", "/api/user/login").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/user/wx/callback").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/user/wx/callback", "/api/user/wx/authorize-url").permitAll()
                         .requestMatchers("/actuator/**", "/error").permitAll()
                         .requestMatchers("/api/clips/callback").permitAll()
                         .anyRequest().authenticated()

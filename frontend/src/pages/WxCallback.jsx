@@ -4,74 +4,58 @@ import api from '../api/client';
 
 export default function WxCallback() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const code = searchParams.get('code');
-    if (!code) {
-      setError('缺少微信授权码（code），请重新登录');
-      setLoading(false);
+    const wxError = searchParams.get('error');
+
+    if (wxError) {
+      setError(`微信授权失败: ${wxError}`);
       return;
     }
 
-    api.get('/user/wx/callback', { params: { code } })
-      .then((res) => {
+    if (!code) {
+      setError('未获取到微信授权 code');
+      return;
+    }
+
+    let cancelled = false;
+
+    const completeWxLogin = async () => {
+      try {
+        const res = await api.get(`/user/wx/callback?code=${encodeURIComponent(code)}`);
+        if (cancelled) {
+          return;
+        }
+
         localStorage.setItem('token', res.data.token);
         if (res.data?.user?.id) {
-          localStorage.setItem('userId', res.data.user.id);
+          localStorage.setItem('userId', String(res.data.user.id));
         }
-        navigate('/', { replace: true });
-      })
-      .catch((err) => {
-        setError(err?.message || '微信登录失败，请重试');
-        setLoading(false);
-      });
-  }, [searchParams, navigate]);
+        navigate('/');
+      } catch (err) {
+        if (!cancelled) {
+          setError(err?.message || '微信登录失败，请稍后重试');
+        }
+      }
+    };
+
+    completeWxLogin();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate, searchParams]);
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: '60vh',
-      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-    }}>
-      {loading ? (
-        <>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            border: '4px solid #e5e7eb',
-            borderTopColor: '#07C160',
-            borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite'
-          }} />
-          <p style={{ marginTop: '16px', color: '#6b7280', fontSize: '14px' }}>
-            微信登录中，请稍候...
-          </p>
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        </>
+    <div style={{ maxWidth: 480, margin: '80px auto', padding: '24px', textAlign: 'center' }}>
+      <h1 style={{ fontSize: '24px', marginBottom: '12px', color: '#111827' }}>微信登录</h1>
+      {error ? (
+        <p style={{ color: '#dc2626', fontSize: '14px' }}>{error}</p>
       ) : (
-        <>
-          <p style={{ color: '#ef4444', fontSize: '14px', marginBottom: '16px' }}>{error}</p>
-          <button
-            onClick={() => navigate('/login', { replace: true })}
-            style={{
-              padding: '8px 24px',
-              backgroundColor: '#6C3FF5',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            返回登录
-          </button>
-        </>
+        <p style={{ color: '#4b5563', fontSize: '14px' }}>正在处理微信登录，请稍候...</p>
       )}
     </div>
   );

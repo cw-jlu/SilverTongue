@@ -99,6 +99,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me-in-.env}
       WECHAT_APP_ID: ${WECHAT_APP_ID:-wx_demo_id}
       WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-wx_demo_secret}
+      WECHAT_REDIRECT_BASE_URL: ${WECHAT_REDIRECT_BASE_URL:-http://localhost:3000}
     depends_on:
       mysql:
         condition: service_healthy

@@ -21,6 +21,7 @@ export default function App() {
       <main style={{ maxWidth: 960, margin: '0 auto', padding: 20 }}>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/wx/callback" element={<WxCallback />} />
           <Route path="/register" element={<Register />} />
           <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/shadowing" element={<PrivateRoute><Shadowing /></PrivateRoute>} />
