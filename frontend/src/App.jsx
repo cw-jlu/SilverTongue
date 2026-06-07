@@ -7,6 +7,7 @@ import Shadowing from './pages/Shadowing';
 import Chat from './pages/Chat';
 import Square from './pages/Square';
 import Meeting from './pages/Meeting';
+import WxCallback from './pages/WxCallback';
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem('token');
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="/chat" element={<PrivateRoute><Chat /></PrivateRoute>} />
           <Route path="/square" element={<PrivateRoute><Square /></PrivateRoute>} />
           <Route path="/meeting" element={<PrivateRoute><Meeting /></PrivateRoute>} />
+          <Route path="/wx/callback" element={<WxCallback />} />
         </Routes>
       </main>
     </BrowserRouter>

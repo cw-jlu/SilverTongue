@@ -99,8 +99,8 @@ services:
       GRPC_AGENT_HOST: ai-agent
       GRPC_AGENT_PORT: 50051
       JWT_SECRET: SilverTongue_JWT_Secret_Key_2026_Very_Long_And_Secure
-      WECHAT_APP_ID: wx_demo_id
-      WECHAT_APP_SECRET: wx_demo_secret
+      WECHAT_APP_ID: ${WECHAT_APP_ID}
+      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET}
     depends_on:
       mysql:
         condition: service_healthy
