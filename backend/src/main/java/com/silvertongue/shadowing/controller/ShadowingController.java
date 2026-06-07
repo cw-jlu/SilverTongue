@@ -1,15 +1,17 @@
 package com.silvertongue.shadowing.controller;
 
 import com.silvertongue.coach.grpc.AssessmentGrpcClient;
+import com.silvertongue.common.ApiResult;
 import com.silvertongue.grpc.assessment.AssessResponse;
 import com.silvertongue.grpc.assessment.WordAssessment;
 import com.silvertongue.grpc.assessment.PhonemeDetail;
+import com.silvertongue.security.AuthenticatedUser;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -38,15 +40,16 @@ public class ShadowingController {
     private String bucketName;
 
     @PostMapping("/record")
-    public ResponseEntity<Map<String, Object>> record(
+    public ApiResult<Map<String, Object>> record(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
             @RequestParam("clipId") Long clipId,
             @RequestParam(value = "targetText", required = false, defaultValue = "") String targetText,
             @RequestParam("audio") MultipartFile audio) {
 
         try {
-            // 1. 上传录音到 MinIO
-            String objectName = String.format("shadowing/%d/%s_%s",
-                    clipId, UUID.randomUUID(),
+            // 1. 上传录音到 MinIO（按用户 ID 分目录）
+            String objectName = String.format("shadowing/%d/%d_%s",
+                    currentUser.getUserId(), clipId, UUID.randomUUID(),
                     audio.getOriginalFilename() != null ? audio.getOriginalFilename() : "recording.webm");
             byte[] audioBytes = audio.getBytes();
 
@@ -57,7 +60,8 @@ public class ShadowingController {
                     .contentType(audio.getContentType() != null ? audio.getContentType() : "audio/webm")
                     .build());
 
-            log.info("Shadowing recording uploaded: clipId={}, path={}, size={} bytes", clipId, objectName, audioBytes.length);
+            log.info("Shadowing recording uploaded: userId={}, clipId={}, path={}, size={} bytes",
+                    currentUser.getUserId(), clipId, objectName, audioBytes.length);
 
             // 2. 调用 gRPC 发音评估 (MFA 对齐 + 评分)
             Map<String, Object> assessment = null;
@@ -93,9 +97,11 @@ public class ShadowingController {
                     }
                     assessment.put("words", words);
 
-                    log.info("Shadowing assessment: clipId={}, score={}", clipId, response.getFinalScore());
+                    log.info("Shadowing assessment: userId={}, clipId={}, score={}",
+                            currentUser.getUserId(), clipId, response.getFinalScore());
                 } catch (Exception e) {
-                    log.error("gRPC assessment failed for shadowing clipId={}: {}", clipId, e.getMessage());
+                    log.error("gRPC assessment failed for userId={}, clipId={}: {}",
+                            currentUser.getUserId(), clipId, e.getMessage());
                     assessment = Map.of("error", e.getMessage());
                 }
             }
@@ -107,12 +113,12 @@ public class ShadowingController {
             result.put("targetText", targetText);
             result.put("assessment", assessment);
 
-            return ResponseEntity.ok(result);
+            return ApiResult.success(result);
 
         } catch (Exception e) {
-            log.error("Shadowing record failed for clipId={}: {}", clipId, e.getMessage(), e);
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("error", e.getMessage()));
+            log.error("Shadowing record failed for userId={}, clipId={}: {}",
+                    currentUser.getUserId(), clipId, e.getMessage(), e);
+            return ApiResult.error(500, "recording failed: " + e.getMessage());
         }
     }
 }
