@@ -30,9 +30,9 @@ export default function WxCallback() {
           return;
         }
 
-        localStorage.setItem('token', res.data.token);
-        if (res.data?.user?.id) {
-          localStorage.setItem('userId', String(res.data.user.id));
+        localStorage.setItem('token', res.token);
+        if (res?.user?.id) {
+          localStorage.setItem('userId', String(res.user.id));
         }
         navigate('/');
       } catch (err) {

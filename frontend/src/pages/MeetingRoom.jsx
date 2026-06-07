@@ -84,7 +84,7 @@ export default function MeetingRoom() {
     setCurrentPlayId(msgId);
     try {
       const res = await api.post('/ai/tts/speak', { text, voice: ttsVoice }, { responseType: 'blob' });
-      const blob = new Blob([res.data], { type: 'audio/mpeg' });
+      const blob = res instanceof Blob ? res : new Blob([res], { type: 'audio/mpeg' });
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audioRef.current = audio;
@@ -164,8 +164,8 @@ export default function MeetingRoom() {
         try {
           const res = await api.post('/ai/stt/transcribe', { audioBase64: base64data });
           setRecordState('idle');
-          if (res?.data?.text) {
-            sendChatMessage(res.data.text);
+          if (res?.text) {
+            sendChatMessage(res.text);
           } else {
             alert('未能识别出语音内容，请重新尝试。');
           }
@@ -186,9 +186,9 @@ export default function MeetingRoom() {
   const loadRoomDetail = async () => {
     try {
       const res = await api.get(`/room/${roomId}`);
-      if (res?.data) {
-        setRoom(res.data);
-        setParticipants(res.data.participants || []);
+      if (res) {
+        setRoom(res);
+        setParticipants(res.participants || []);
       }
     } catch (error) {
       console.error('Failed to load room details:', error);
@@ -199,8 +199,8 @@ export default function MeetingRoom() {
   const loadFriends = async () => {
     try {
       const res = await api.get('/friend');
-      if (res?.data) {
-        setFriends(res.data);
+      if (Array.isArray(res)) {
+        setFriends(res);
       }
     } catch (error) {
       console.error('Failed to load friends:', error);
@@ -213,8 +213,8 @@ export default function MeetingRoom() {
     setAiRolesError('');
     try {
       const res = await api.get('/room/ai-roles');
-      if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
-        setAiRoles(res.data);
+      if (Array.isArray(res) && res.length > 0) {
+        setAiRoles(res);
       } else {
         setAiRolesError('预设角色加载失败，请确认 AI 服务已启动');
       }
@@ -307,6 +307,7 @@ export default function MeetingRoom() {
       senderName: currentUserInfo?.nickname || '我',
       content: msgText
     };
+    localMsg.senderName = currentUserInfo?.nickname || 'Me';
     setMessages(prev => [...prev, localMsg]);
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -399,6 +400,7 @@ export default function MeetingRoom() {
               senderName: message.senderName || '用户',
               content: message.content || ''
             };
+            newMsg.senderName = message.senderName || 'User';
             setMessages(prev => {
               if (prev.some(m => m.id === newMsg.id || (m.content === newMsg.content && m.senderName === newMsg.senderName && (Date.now() - m.id < 2000)))) {
                 return prev;
@@ -566,11 +568,11 @@ export default function MeetingRoom() {
 
       try {
         const res = await api.get('/user/me');
-        if (res?.data) {
-          currentUid = res.data.id;
-          setUserId(res.data.id);
-          setCurrentUserInfo(res.data);
-          initializeMediaAndSignaling(res.data.id);
+        if (res) {
+          currentUid = res.id;
+          setUserId(res.id);
+          setCurrentUserInfo(res);
+          initializeMediaAndSignaling(res.id);
         }
       } catch (err) {
         console.error('Failed to authenticate or fetch user:', err);
