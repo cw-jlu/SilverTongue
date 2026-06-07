@@ -5,6 +5,7 @@ import com.silvertongue.user.dto.LoginResponse;
 import com.silvertongue.user.dto.RegisterRequest;
 import com.silvertongue.user.dto.UserProfileResponse;
 import com.silvertongue.user.service.UserService;
+import com.silvertongue.user.service.WeChatService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -29,6 +30,9 @@ class UserControllerIntegrationTest extends AbstractWebMvcIntegrationTest {
 
     @MockBean
     private UserService userService;
+
+    @MockBean
+    private WeChatService weChatService;
 
     @Test
     void registerShouldAllowAnonymousRequestAndWrapSuccessBody() throws Exception {

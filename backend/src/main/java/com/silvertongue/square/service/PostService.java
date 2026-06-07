@@ -253,7 +253,9 @@ public class PostService {
 
     private void savePostDocument(PostDocument doc) {
         try {
+            ensurePostIndex();
             esTemplate.save(doc);
+            refreshPostIndex();
         } catch (Exception e) {
             log.warn("Failed to sync post {} to Elasticsearch, continuing without index update", doc.getPostId(), e);
         }
@@ -262,6 +264,7 @@ public class PostService {
     private void deletePostDocument(Long postId) {
         try {
             esTemplate.delete(String.valueOf(postId), PostDocument.class);
+            refreshPostIndex();
         } catch (Exception e) {
             log.warn("Failed to delete post {} from Elasticsearch, continuing without index cleanup", postId, e);
         }
@@ -273,6 +276,21 @@ public class PostService {
         } catch (Exception e) {
             log.warn("Elasticsearch search failed, returning empty result", e);
             return null;
+        }
+    }
+
+    private void ensurePostIndex() {
+        var indexOps = esTemplate.indexOps(PostDocument.class);
+        if (indexOps != null && !indexOps.exists()) {
+            indexOps.create();
+            indexOps.putMapping(indexOps.createMapping());
+        }
+    }
+
+    private void refreshPostIndex() {
+        var indexOps = esTemplate.indexOps(PostDocument.class);
+        if (indexOps != null) {
+            indexOps.refresh();
         }
     }
 }

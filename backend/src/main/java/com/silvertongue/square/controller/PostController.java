@@ -92,10 +92,15 @@ public class PostController {
     /** ES 全文检索 */
     @GetMapping("/search")
     public ApiResult<List<PostVO>> search(
-            @RequestParam("q") String keyword,
+            @RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return ApiResult.success(postService.search(keyword, page, size));
+        String actualKeyword = q != null && !q.isBlank() ? q : keyword;
+        if (actualKeyword == null || actualKeyword.isBlank()) {
+            throw new IllegalArgumentException("search keyword must not be blank");
+        }
+        return ApiResult.success(postService.search(actualKeyword, page, size));
     }
 }
