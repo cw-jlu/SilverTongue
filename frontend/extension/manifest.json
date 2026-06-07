@@ -8,7 +8,7 @@
     "*://*.youtube.com/*",
     "*://*.netflix.com/*",
     "*://*.youtu.be/*",
-    "*://localhost:8080/*"
+    "*://localhost:3000/*"
   ],
   "action": {
     "default_popup": "popup.html",
