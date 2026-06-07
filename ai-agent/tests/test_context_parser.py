@@ -1,5 +1,7 @@
 import os
-import fitz
+import pytest
+
+fitz = pytest.importorskip("fitz")
 
 def test_pdf_parsing():
     test_pdf = os.path.join(os.path.dirname(__file__), '1.pdf')

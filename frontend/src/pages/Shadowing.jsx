@@ -11,8 +11,8 @@ import {
 } from 'react-resizable-panels';
 import {
   Play, Pause, SkipBack, SkipForward, Repeat, Repeat1,
-  Gauge, Mic, Square, Check, X, Download, BookOpen,
-  Scissors, ZoomIn, ZoomOut, RefreshCw, Upload,
+  Gauge, Mic, Check, X, BookOpen,
+  Scissors, RefreshCw, Upload,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -26,7 +26,7 @@ const PLAY_MODES = {
 };
 
 // ---------------------------------------------------------------------------
-// 主组件
+// 主布局
 // ---------------------------------------------------------------------------
 export default function Shadowing() {
   // -- 剪辑列表 --
@@ -34,6 +34,13 @@ export default function Shadowing() {
   const [selectedClip, setSelectedClip] = useState(null);
   const [file, setFile] = useState(null);
   const [uploadMsg, setUploadMsg] = useState('');
+  const [uploadedMaterial, setUploadedMaterial] = useState(null);
+  const [clipDraft, setClipDraft] = useState({
+    startTime: '0',
+    endTime: '10',
+    content: '',
+    translation: '',
+  });
 
   // -- 播放状态 --
   const [playbackRate, setPlaybackRate] = useState(1.0);
@@ -66,7 +73,7 @@ export default function Shadowing() {
   // -- 变速弹窗 --
   const [speedOpen, setSpeedOpen] = useState(false);
 
-  // -- 录音器 --
+  // -- 录音状态 --
   const {
     startRecording,
     stopRecording,
@@ -82,7 +89,7 @@ export default function Shadowing() {
   // 加载剪辑列表
   // -------------------------------------------------------------------
   const loadClips = () =>
-    api.get('/clips?page=1&size=50').then((r) => setClips(r.data || []));
+    api.get('/clips?page=1&size=50').then((r) => setClips(r || []));
 
   useEffect(() => { loadClips(); }, []);
 
@@ -94,17 +101,47 @@ export default function Shadowing() {
     const fd = new FormData();
     fd.append('file', file);
     try {
-      const r = await api.post('/material/upload', fd);
-      setUploadMsg(`上传成功: ${r.data?.title || file.name}`);
+      const material = await api.post('/material/upload', fd);
+      setUploadedMaterial(material);
+      setClipDraft((draft) => ({
+        ...draft,
+        content: draft.content || material?.title || file.name,
+      }));
+      setUploadMsg(`Material uploaded: ${material?.title || file.name}. Create a clip to continue.`);
       setFile(null);
-      loadClips();
     } catch (err) {
-      setUploadMsg(err?.message || '上传失败');
+      setUploadMsg(err?.message || 'Upload failed');
+    }
+  };
+
+  const createClipFromUpload = async () => {
+    if (!uploadedMaterial) return;
+
+    try {
+      const clip = await api.post('/clips', {
+        materialId: uploadedMaterial.id,
+        startTime: Number(clipDraft.startTime || 0),
+        endTime: Number(clipDraft.endTime || 0),
+        content: clipDraft.content,
+        translation: clipDraft.translation,
+      });
+      await loadClips();
+      selectClip(clip);
+      setUploadedMaterial(null);
+      setClipDraft({
+        startTime: '0',
+        endTime: '10',
+        content: '',
+        translation: '',
+      });
+      setUploadMsg('Clip created. You can start shadowing now.');
+    } catch (err) {
+      setUploadMsg(err?.message || 'Clip creation failed');
     }
   };
 
   // -------------------------------------------------------------------
-  // 选择剪辑 → 初始化 WaveSurfer
+  // 选择剪辑 & 初始化 WaveSurfer
   // -------------------------------------------------------------------
   const selectClip = useCallback((clip) => {
     setSelectedClip(clip);
@@ -153,7 +190,7 @@ export default function Shadowing() {
       setDuration(ws.getDuration());
       setWsReady(true);
 
-      // 如果有字幕/transcription，解析为 segments
+      // 如果有字幕 transcription，解析为 segments
       const trans = selectedClip.transcription;
       if (trans && trans.timeline) {
         setSegments(trans.timeline);
@@ -208,7 +245,7 @@ export default function Shadowing() {
   }, [playbackRate]);
 
   // -------------------------------------------------------------------
-  // 播放模式 — 更新 region
+  // 播放模式 & 更新 region
   // -------------------------------------------------------------------
   useEffect(() => {
     const ws = wavesurferRef.current;
@@ -294,9 +331,8 @@ export default function Shadowing() {
     fd.append('clipId', selectedClip.id);
 
     try {
-      const r = await api.post('/shadowing/record', fd);
+      const payload = await api.post('/shadowing/record', fd);
       // Backend 返回 ApiResult<{ clipId, audioUrl, targetText, assessment }>
-      const payload = r.data || r;
       setAssessmentResult(payload.assessment || payload);
     } catch (err) {
       console.error('评估失败:', err);
@@ -369,6 +405,56 @@ export default function Shadowing() {
             <span style={{ fontSize: 13, color: '#6b7280' }}>{uploadMsg}</span>
           )}
         </div>
+        {uploadedMaterial && (
+          <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+              <input
+                className="input"
+                type="number"
+                min="0"
+                step="0.1"
+                value={clipDraft.startTime}
+                onChange={(e) => setClipDraft((draft) => ({ ...draft, startTime: e.target.value }))}
+                placeholder="Start time (s)"
+              />
+              <input
+                className="input"
+                type="number"
+                min="0.1"
+                step="0.1"
+                value={clipDraft.endTime}
+                onChange={(e) => setClipDraft((draft) => ({ ...draft, endTime: e.target.value }))}
+                placeholder="End time (s)"
+              />
+            </div>
+            <input
+              className="input"
+              value={clipDraft.content}
+              onChange={(e) => setClipDraft((draft) => ({ ...draft, content: e.target.value }))}
+              placeholder="Clip text"
+            />
+            <input
+              className="input"
+              value={clipDraft.translation}
+              onChange={(e) => setClipDraft((draft) => ({ ...draft, translation: e.target.value }))}
+              placeholder="Translation (optional)"
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-sm btn-primary" onClick={createClipFromUpload}>
+                <Scissors size={14} style={{ marginRight: 4 }} /> Create clip
+              </button>
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={() => {
+                  setUploadedMaterial(null);
+                  setUploadMsg('');
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ================================================================ */}
@@ -398,7 +484,7 @@ export default function Shadowing() {
                 {c.content ? c.content.slice(0, 60) + (c.content.length > 60 ? '...' : '') : '(无字幕)'}
               </p>
               <small style={{ color: '#9ca3af' }}>
-                ⏱ {c.startTime}s – {c.endTime}s
+                ⏱️ {c.startTime}s ~ {c.endTime}s
               </small>
             </div>
           ))}
@@ -523,7 +609,7 @@ export default function Shadowing() {
                     {/* 段落指示 */}
                     {segments.length > 0 && (
                       <span style={{ fontSize: 12, color: '#6b7280', marginLeft: 8 }}>
-                        第 {currentSegment + 1}/{segments.length} 段
+                        ⏱️ {currentSegment + 1}/{segments.length} 段
                       </span>
                     )}
                   </div>
@@ -651,12 +737,12 @@ export default function Shadowing() {
                           }}
                         >
                           <p style={{ margin: 0, fontWeight: 600, color: '#166534' }}>
-                            📈 得分: {assessmentResult.finalScore?.toFixed(1) || '—'} / 100
+                            Score: {assessmentResult.finalScore?.toFixed(1) || '--'} / 100
                           </p>
                           <div style={{ display: 'flex', gap: 16, fontSize: 13, color: '#4b5563', marginTop: 4 }}>
-                            <span>准确度: {assessmentResult.accuracy?.toFixed(1) || '—'}</span>
-                            <span>流利度: {assessmentResult.fluency?.toFixed(1) || '—'}</span>
-                            <span>完整度: {assessmentResult.completeness?.toFixed(1) || '—'}</span>
+                            <span>Accuracy: {assessmentResult.accuracy?.toFixed(1) || '--'}</span>
+                            <span>Fluency: {assessmentResult.fluency?.toFixed(1) || '--'}</span>
+                            <span>Completeness: {assessmentResult.completeness?.toFixed(1) || '--'}</span>
                           </div>
                           {assessmentResult.words && (
                             <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -694,7 +780,7 @@ export default function Shadowing() {
                         className="btn btn-danger"
                         style={{ borderRadius: '50%', width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         onClick={startRecording}
-                        title="开始跟读录音"
+                        title="Start recording"
                       >
                         <Mic size={24} fill="white" />
                       </button>
@@ -770,7 +856,7 @@ export default function Shadowing() {
                 </div>
               ))
             ) : (
-              <p style={{ color: '#9ca3af' }}>未找到 "{dictWord}" 的释义</p>
+              <p style={{ color: '#9ca3af' }}>No dictionary entry found for "{dictWord}".</p>
             )}
           </div>
         </div>

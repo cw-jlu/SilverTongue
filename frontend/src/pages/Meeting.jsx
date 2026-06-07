@@ -6,10 +6,9 @@ export default function Meeting() {
   const [rooms, setRooms] = useState([]);
   const [roomName, setRoomName] = useState('');
   const [maxUsers, setMaxUsers] = useState(10);
-  const [userId, setUserId] = useState(null);
   const navigate = useNavigate();
 
-  const loadRooms = () => api.get('/room').then((response) => setRooms(response.data || []));
+  const loadRooms = () => api.get('/room').then((response) => setRooms(response || []));
 
   useEffect(() => {
     loadRooms();
@@ -17,20 +16,15 @@ export default function Meeting() {
 
   useEffect(() => {
     api.get('/user/me')
-      .then((response) => {
-        if (response.data?.id) {
-          setUserId(response.data.id);
-        }
-      })
       .catch(() => {});
   }, []);
 
   const createRoom = async () => {
     if (!roomName.trim()) return;
     try {
-      const res = await api.post('/room', { roomName, maxUsers });
-      if (res?.data?.id) {
-        navigate(`/meeting/${res.data.id}`);
+      const res = await api.post('/room', { roomName, maxUsers: Number(maxUsers) });
+      if (res?.id) {
+        navigate(`/meeting/${res.id}`);
       }
     } catch (error) {
       alert(error?.message || '创建失败');

@@ -8,6 +8,8 @@ import com.silvertongue.harvester.dto.HarvestClipRequest;
 import com.silvertongue.harvester.service.ClipService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.net.URI;
 import java.util.List;
 
 @RestController
@@ -74,6 +77,26 @@ public class ClipController {
     /**
      * Python Agent 回调：更新切片状态
      */
+    @GetMapping("/{id}/audio")
+    public ResponseEntity<?> audio(@PathVariable Long id) {
+        try {
+            java.io.InputStream stream = clipService.getAudioStream(id);
+            if (stream != null) {
+                return ResponseEntity.ok()
+                        .contentType(org.springframework.http.MediaType.parseMediaType("audio/mpeg"))
+                        .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"clip_" + id + ".mp3\"")
+                        .body(new org.springframework.core.io.InputStreamResource(stream));
+            }
+
+            String redirectUrl = clipService.getPlaybackUrl(id);
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .location(URI.create(redirectUrl))
+                    .build();
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
     @PostMapping("/callback")
     public ApiResult<String> callback(@RequestBody HarvestCallbackRequest request) {
         clipService.updateStatus(request.getClipId(), request.getStatus(), request.getStoragePath());

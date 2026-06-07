@@ -34,10 +34,13 @@ public class SecurityConfig {
                 .logout(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/user/register", "/api/user/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/user/wx/callback", "/api/user/wx/authorize-url").permitAll()
+                        .requestMatchers("/ws/signaling/**").permitAll()
                         .requestMatchers("/actuator/**", "/error").permitAll()
                         .requestMatchers("/api/clips/callback").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/clips/*/audio").permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exceptions -> exceptions

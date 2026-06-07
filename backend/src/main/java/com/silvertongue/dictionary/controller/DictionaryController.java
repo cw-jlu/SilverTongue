@@ -1,11 +1,11 @@
 package com.silvertongue.dictionary.controller;
 
+import com.silvertongue.common.ApiResult;
 import com.silvertongue.dictionary.grpc.DictionaryGrpcClient;
 import com.silvertongue.grpc.dictionary.DictEntry;
 import com.silvertongue.grpc.dictionary.LookupResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -26,9 +26,9 @@ public class DictionaryController {
     private final DictionaryGrpcClient dictionaryGrpcClient;
 
     @GetMapping("/lookup")
-    public ResponseEntity<Map<String, Object>> lookup(@RequestParam("word") String word) {
+    public ApiResult<Map<String, Object>> lookup(@RequestParam("word") String word) {
         if (word == null || word.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "word is required"));
+            return ApiResult.error(400, "word is required");
         }
 
         LookupResponse response = dictionaryGrpcClient.lookup(word.trim());
@@ -40,7 +40,7 @@ public class DictionaryController {
                 .map(DictionaryController::entryToMap)
                 .collect(Collectors.toList()));
 
-        return ResponseEntity.ok(result);
+        return ApiResult.success(result);
     }
 
     private static Map<String, Object> entryToMap(DictEntry entry) {
