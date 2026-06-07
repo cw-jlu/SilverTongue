@@ -11,8 +11,8 @@ import {
 } from 'react-resizable-panels';
 import {
   Play, Pause, SkipBack, SkipForward, Repeat, Repeat1,
-  Gauge, Mic, Square, Check, X, Download, BookOpen,
-  Scissors, ZoomIn, ZoomOut, RefreshCw, Upload,
+  Gauge, Mic, Check, X, BookOpen,
+  Scissors, RefreshCw, Upload,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -26,7 +26,7 @@ const PLAY_MODES = {
 };
 
 // ---------------------------------------------------------------------------
-// 主组�?
+// 主布局
 // ---------------------------------------------------------------------------
 export default function Shadowing() {
   // -- 剪辑列表 --
@@ -42,7 +42,7 @@ export default function Shadowing() {
     translation: '',
   });
 
-  // -- 播放状�?--
+  // -- 播放状态 --
   const [playbackRate, setPlaybackRate] = useState(1.0);
   const [playMode, setPlayMode] = useState('single');
   const [currentSegment, setCurrentSegment] = useState(0);
@@ -70,10 +70,10 @@ export default function Shadowing() {
   const [dictResult, setDictResult] = useState(null);
   const [dictLoading, setDictLoading] = useState(false);
 
-  // -- 变速弹�?--
+  // -- 变速弹窗 --
   const [speedOpen, setSpeedOpen] = useState(false);
 
-  // -- 录音�?--
+  // -- 录音状态 --
   const {
     startRecording,
     stopRecording,
@@ -89,7 +89,7 @@ export default function Shadowing() {
   // 加载剪辑列表
   // -------------------------------------------------------------------
   const loadClips = () =>
-    api.get('/clips?page=1&size=50').then((r) => setClips(r.data || []));
+    api.get('/clips?page=1&size=50').then((r) => setClips(r || []));
 
   useEffect(() => { loadClips(); }, []);
 
@@ -101,8 +101,7 @@ export default function Shadowing() {
     const fd = new FormData();
     fd.append('file', file);
     try {
-      const r = await api.post('/material/upload', fd);
-      const material = r.data || r;
+      const material = await api.post('/material/upload', fd);
       setUploadedMaterial(material);
       setClipDraft((draft) => ({
         ...draft,
@@ -119,14 +118,13 @@ export default function Shadowing() {
     if (!uploadedMaterial) return;
 
     try {
-      const r = await api.post('/clips', {
+      const clip = await api.post('/clips', {
         materialId: uploadedMaterial.id,
         startTime: Number(clipDraft.startTime || 0),
         endTime: Number(clipDraft.endTime || 0),
         content: clipDraft.content,
         translation: clipDraft.translation,
       });
-      const clip = r.data || r;
       await loadClips();
       selectClip(clip);
       setUploadedMaterial(null);
@@ -143,7 +141,7 @@ export default function Shadowing() {
   };
 
   // -------------------------------------------------------------------
-  // 选择剪辑 �?初始�?WaveSurfer
+  // 选择剪辑 & 初始化 WaveSurfer
   // -------------------------------------------------------------------
   const selectClip = useCallback((clip) => {
     setSelectedClip(clip);
@@ -154,7 +152,7 @@ export default function Shadowing() {
   }, []);
 
   // -------------------------------------------------------------------
-  // WaveSurfer 初始�?
+  // WaveSurfer 初始化
   // -------------------------------------------------------------------
   useEffect(() => {
     if (!selectedClip || !waveformContainerRef.current) return;
@@ -166,7 +164,7 @@ export default function Shadowing() {
       wsRegionsRef.current = null;
     }
 
-    // 构建音频 URL：优先使�?clip �?audioPath，否则用 MinIO URL
+    // 构建音频 URL：优先使用 clip 的 audioPath，否则用 MinIO URL
     const audioUrl =
       selectedClip.audioPath ||
       selectedClip.sourceUrl ||
@@ -192,12 +190,12 @@ export default function Shadowing() {
       setDuration(ws.getDuration());
       setWsReady(true);
 
-      // 如果有字�?transcription，解析为 segments
+      // 如果有字幕 transcription，解析为 segments
       const trans = selectedClip.transcription;
       if (trans && trans.timeline) {
         setSegments(trans.timeline);
       } else if (selectedClip.content) {
-        // 简单地将文本按句分�?
+        // 简单地将文本按句分割
         const text = selectedClip.content;
         const dur = ws.getDuration();
         const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
@@ -247,7 +245,7 @@ export default function Shadowing() {
   }, [playbackRate]);
 
   // -------------------------------------------------------------------
-  // 播放模式 �?更新 region
+  // 播放模式 & 更新 region
   // -------------------------------------------------------------------
   useEffect(() => {
     const ws = wavesurferRef.current;
@@ -299,7 +297,7 @@ export default function Shadowing() {
       const url = URL.createObjectURL(liveBlob);
       setRecordingUrl(url);
 
-      // 初始化录音波�?
+      // 初始化录音波形
       if (recordingContainerRef.current) {
         if (recordingWsRef.current) recordingWsRef.current.destroy();
 
@@ -333,9 +331,8 @@ export default function Shadowing() {
     fd.append('clipId', selectedClip.id);
 
     try {
-      const r = await api.post('/shadowing/record', fd);
+      const payload = await api.post('/shadowing/record', fd);
       // Backend 返回 ApiResult<{ clipId, audioUrl, targetText, assessment }>
-      const payload = r.data || r;
       setAssessmentResult(payload.assessment || payload);
     } catch (err) {
       console.error('评估失败:', err);
@@ -370,7 +367,7 @@ export default function Shadowing() {
   };
 
   // -------------------------------------------------------------------
-  // 格式化时�?
+  // 格式化时间
   // -------------------------------------------------------------------
   const fmt = (s) => {
     const m = Math.floor(s / 60);
@@ -461,7 +458,7 @@ export default function Shadowing() {
       </div>
 
       {/* ================================================================ */}
-      {/* 主布局：剪辑列�?+ 播放�?*/}
+      {/* 主布局：剪辑列表 + 播放器 */}
       {/* ================================================================ */}
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
         {/* ---- 左侧剪辑列表 ---- */}
@@ -484,10 +481,10 @@ export default function Shadowing() {
               }}
             >
               <p style={{ margin: 0, fontSize: 13, fontWeight: 500 }}>
-                {c.content ? c.content.slice(0, 60) + (c.content.length > 60 ? '...' : '') : '(无字�?'}
+                {c.content ? c.content.slice(0, 60) + (c.content.length > 60 ? '...' : '') : '(无字幕)'}
               </p>
               <small style={{ color: '#9ca3af' }}>
-                �?{c.startTime}s �?{c.endTime}s
+                ⏱️ {c.startTime}s ~ {c.endTime}s
               </small>
             </div>
           ))}
@@ -506,12 +503,12 @@ export default function Shadowing() {
                 color: '#9ca3af',
               }}
             >
-              请从左侧选择一个语料切片开始跟�?
+              请从左侧选择一个语料切片开始跟读
             </div>
           ) : (
             <PanelGroup direction="vertical" style={{ height: 560 }}>
               {/* ==================================================== */}
-              {/* 上栏：原声波�?+ 播放控制 */}
+              {/* 上栏：原声波形 + 播放控制 */}
               {/* ==================================================== */}
               <Panel defaultSize={55} minSize={30}>
                 <div className="card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -526,7 +523,7 @@ export default function Shadowing() {
                     {fmt(currentTime)} / {fmt(duration)}
                   </div>
 
-                  {/* ============ 播放控制�?============ */}
+                  {/* ============ 播放控制栏 ============ */}
                   <div
                     style={{
                       display: 'flex',
@@ -538,7 +535,7 @@ export default function Shadowing() {
                       marginTop: 8,
                     }}
                   >
-                    {/* 变�?*/}
+                    {/* 变速 */}
                     <div style={{ position: 'relative' }}>
                       <button
                         className="btn btn-sm btn-ghost"
@@ -590,7 +587,7 @@ export default function Shadowing() {
                       <PlayModeIcon size={16} />
                     </button>
 
-                    {/* 上一�?*/}
+                    {/* 上一段 */}
                     <button className="btn btn-sm btn-ghost" onClick={prevSegment} disabled={currentSegment === 0}>
                       <SkipBack size={18} />
                     </button>
@@ -604,7 +601,7 @@ export default function Shadowing() {
                       <PlayIcon size={20} fill="white" />
                     </button>
 
-                    {/* 下一�?*/}
+                    {/* 下一段 */}
                     <button className="btn btn-sm btn-ghost" onClick={nextSegment} disabled={currentSegment >= segments.length - 1}>
                       <SkipForward size={18} />
                     </button>
@@ -612,12 +609,12 @@ export default function Shadowing() {
                     {/* 段落指示 */}
                     {segments.length > 0 && (
                       <span style={{ fontSize: 12, color: '#6b7280', marginLeft: 8 }}>
-                        �?{currentSegment + 1}/{segments.length} �?
+                        ⏱️ {currentSegment + 1}/{segments.length} 段
                       </span>
                     )}
                   </div>
 
-                  {/* ============ 字幕显示 (可�? ============ */}
+                  {/* ============ 字幕显示 (可选) ============ */}
                   {segments.length > 0 && (
                     <div
                       className="caption-area"
@@ -656,11 +653,11 @@ export default function Shadowing() {
               <PanelResizeHandle style={{ height: 6, background: '#e5e7eb', borderRadius: 3, margin: '4px 0' }} />
 
               {/* ==================================================== */}
-              {/* 下栏：用户录�?*/}
+              {/* 下栏：用户录音 */}
               {/* ==================================================== */}
               <Panel defaultSize={45} minSize={20}>
                 <div className="card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                  {/* 录音�?*/}
+                  {/* 录音中 */}
                   {isRecording ? (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
                       <LiveAudioVisualizer
@@ -683,7 +680,7 @@ export default function Shadowing() {
                           style={{ borderRadius: '50%', width: 36, height: 36 }}
                           onClick={() => {
                             stopRecording();
-                            // 取消（不保存�?
+                            // 取消（不保存）
                           }}
                           title="取消"
                         >
@@ -770,7 +767,7 @@ export default function Shadowing() {
                       )}
                     </div>
                   ) : (
-                    /* 无录�?*/
+                    /* 无录音 */
                     <div
                       style={{
                         flex: 1,
@@ -828,7 +825,7 @@ export default function Shadowing() {
             </div>
 
             {dictLoading ? (
-              <p style={{ color: '#9ca3af' }}>查询�?..</p>
+              <p style={{ color: '#9ca3af' }}>查询中...</p>
             ) : dictResult?.found ? (
               dictResult.entries.map((entry, i) => (
                 <div key={i} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #f3f4f6' }}>

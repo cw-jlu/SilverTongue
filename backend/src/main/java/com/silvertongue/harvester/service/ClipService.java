@@ -87,6 +87,9 @@ public class ClipService {
     }
 
     public List<ClipVO> listAll(int page, int size) {
+        if (page < 1) {
+            page = 1;
+        }
         int offset = (page - 1) * size;
         List<Clip> clips = clipMapper.selectList(new LambdaQueryWrapper<Clip>()
                 .orderByDesc(Clip::getCreateTime)
@@ -147,7 +150,7 @@ public class ClipService {
 
         if (material.getStoragePath() != null && !material.getStoragePath().isBlank()) {
             try {
-                return minioClient.getPresignedObjectUrl(
+                String presignedUrl = minioClient.getPresignedObjectUrl(
                         GetPresignedObjectUrlArgs.builder()
                                 .method(Method.GET)
                                 .bucket(materialsBucketName)
@@ -155,6 +158,10 @@ public class ClipService {
                                 .expiry(1, TimeUnit.HOURS)
                                 .build()
                 );
+                if (presignedUrl != null && presignedUrl.contains("//minio:9000")) {
+                    presignedUrl = presignedUrl.replace("//minio:9000", "//localhost:9000");
+                }
+                return presignedUrl;
             } catch (Exception e) {
                 throw new IllegalStateException("failed to create playback url", e);
             }
@@ -165,6 +172,30 @@ public class ClipService {
         }
 
         throw new IllegalStateException("clip media is not available");
+    }
+
+    public java.io.InputStream getAudioStream(Long clipId) {
+        Clip clip = clipMapper.selectById(clipId);
+        if (clip == null) {
+            throw new IllegalArgumentException("clip not found");
+        }
+        Material material = materialMapper.selectById(clip.getMaterialId());
+        if (material == null) {
+            throw new IllegalArgumentException("material not found");
+        }
+        if (material.getStoragePath() != null && !material.getStoragePath().isBlank()) {
+            try {
+                return minioClient.getObject(
+                        io.minio.GetObjectArgs.builder()
+                                .bucket(materialsBucketName)
+                                .object(material.getStoragePath())
+                                .build()
+                );
+            } catch (Exception e) {
+                throw new IllegalStateException("failed to get audio stream from MinIO", e);
+            }
+        }
+        return null;
     }
 
     public void updateStatus(Long clipId, int status, String storagePath) {

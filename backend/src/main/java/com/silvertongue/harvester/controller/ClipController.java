@@ -78,10 +78,23 @@ public class ClipController {
      * Python Agent 回调：更新切片状态
      */
     @GetMapping("/{id}/audio")
-    public ResponseEntity<Void> audio(@PathVariable Long id) {
-        return ResponseEntity.status(HttpStatus.FOUND)
-                .location(URI.create(clipService.getPlaybackUrl(id)))
-                .build();
+    public ResponseEntity<?> audio(@PathVariable Long id) {
+        try {
+            java.io.InputStream stream = clipService.getAudioStream(id);
+            if (stream != null) {
+                return ResponseEntity.ok()
+                        .contentType(org.springframework.http.MediaType.parseMediaType("audio/mpeg"))
+                        .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"clip_" + id + ".mp3\"")
+                        .body(new org.springframework.core.io.InputStreamResource(stream));
+            }
+
+            String redirectUrl = clipService.getPlaybackUrl(id);
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .location(URI.create(redirectUrl))
+                    .build();
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     @PostMapping("/callback")
