@@ -36,6 +36,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/user/register", "/api/user/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/user/wx/callback", "/api/user/wx/authorize-url").permitAll()
+                        .requestMatchers("/ws/signaling/**").permitAll()
                         .requestMatchers("/actuator/**", "/error").permitAll()
                         .requestMatchers("/api/clips/callback").permitAll()
                         .anyRequest().authenticated()
