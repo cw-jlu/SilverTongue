@@ -5,9 +5,17 @@ export default function Meeting() {
   const [rooms, setRooms] = useState([]);
   const [roomName, setRoomName] = useState('');
   const [maxUsers, setMaxUsers] = useState(10);
+  const [userId, setUserId] = useState(null);
 
   const loadRooms = () => api.get('/room').then(r => setRooms(r.data || []));
   useEffect(() => { loadRooms(); }, []);
+
+  // 从服务端获取当前用户 ID，避免依赖 localStorage
+  useEffect(() => {
+    api.get('/user/me').then(r => {
+      if (r.data?.id) setUserId(r.data.id);
+    }).catch(() => { /* 静默失败，joinRoom 会回退到 'guest' */ });
+  }, []);
 
   const createRoom = async () => {
     if (!roomName.trim()) return;
@@ -19,13 +27,7 @@ export default function Meeting() {
   const joinRoom = async (roomId) => {
     try {
       await api.post(`/room/${roomId}/join`);
-      // 动态构建 WebSocket URL：开发模式连 localhost:8080，生产模式用当前 host
-      const isDev = window.location.port === '3000';
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsHost = window.location.hostname;
-      const wsPort = isDev ? ':8080' : (window.location.port ? `:${window.location.port}` : '');
-      const wsUrl = `${wsProtocol}//${wsHost}${wsPort}/ws/signaling?userId=${localStorage.getItem('userId') || 'guest'}`;
-      const ws = new WebSocket(wsUrl);
+      const ws = new WebSocket(`ws://localhost:8080/ws/signaling?userId=${userId || 'guest'}`);
       ws.onopen = () => ws.send(JSON.stringify({ type: 'join', roomId }));
       ws.onmessage = (e) => console.log('Signal:', JSON.parse(e.data));
       alert('已加入房间，WebSocket 信令已连接（查看 Console）');
