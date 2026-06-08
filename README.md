@@ -1,4 +1,4 @@
-# SilverTongue) - AI 驱动的全链路英语口语学习平台
+# SilverTongue - AI 驱动的全链路英语口语学习平台
 
 [![Spring Boot](https://img.shields.io/badge/Backend-Spring%20Boot%203.x-brightgreen)](https://spring.io/projects/spring-boot)
 [![React](https://img.shields.io/badge/Frontend-React%2018-blue)](https://reactjs.org/)
